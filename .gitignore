@@ -1,0 +1,54 @@
+# ========== 环境文件 ==========
+.env
+.env.local
+.env.production
+xiaozhi_mcp_token.txt
+
+# ========== 运行时状态 ==========
+state/
+snapshots/
+logs/
+*.log
+*.log.gz
+
+# ========== Python 缓存 ==========
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# ========== 模型数据 ==========
+corpus/
+rsi_backups/
+models/
+
+# ========== 构建产物 ==========
+target/
+*.exe
+*.dll
+*.so
+*.dylib
+build/
+dist/
+
+# ========== 编辑器 ==========
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ========== 临时文件 ==========
+_gen_*.py
+_build_*.py
+_tmp*.txt
+_tmp*.py
+
+# ========== Node ==========
+node_modules/
