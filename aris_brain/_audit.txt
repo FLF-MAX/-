@@ -1,0 +1,19 @@
+=== 现有能力审计 ===
+
+EpisodicMemory: 6613 行
+  保存/回忆情景 ✓
+  相似度匹配 ✓
+  用户画像 ✗
+RulesEngine: ✓ 确定性执行 (零幻觉)
+memory_store: 未加载
+CognitiveBus: ✓ 4级路由 (零LLM路径)
+
+=== 能力缺口 ===
+1. 用户画像: ✗ 没有被动学习用户偏好的引擎
+2. 无限记忆: △ 有存储但无分层压缩/遗忘机制
+3. 幻觉消除: △ 有零LLM路径但无事实锚定
+
+=== 需要构建 ===
+laap_usermodel.py — 从对话中被动学习用户画像
+laap_memory_hierarchy.py — 分层无限记忆系统
+laap_grounding.py — 事实锚定防幻觉
