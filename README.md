@@ -1,4 +1,5 @@
-
+<img width="1672" height="2132" alt="f3a21a1182bc8496f45e2bf2b2cff6e1" src="https://github.com/user-attachments/assets/04234d6f-a8d4-466f-b4ec-9e78e41ce104" />
+欢迎加入架构学派！！！这是一条区别于传统LLM transformer的新架构
 <p align="center">
   <img src="assets/laap-logo.svg" width="600" alt="LAAP AGI Logo"/>
 </p>
