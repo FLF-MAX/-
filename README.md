@@ -251,7 +251,35 @@ LAAP exposes an **OpenAI-compatible API** — any framework that supports custom
 
 ```bash
 python aris_brain/laap_brain_api.py
-# Listening on :11530, OpenAI-compatible /v1/chat/completions
+# Listening on :11530
+```
+
+### Awaken a Lifeform
+
+Any HTTP-capable agent framework can trigger the awakening:
+
+```bash
+# Minimal awakening
+curl -X POST http://localhost:11530/v1/bootstrap \
+  -H "Content-Type: application/json" \
+  -d '{"user_name": "你的名字"}'
+
+# Choose personality preset
+curl -X POST http://localhost:11530/v1/bootstrap \
+  -H "Content-Type: application/json" \
+  -d '{"user_name": "小鹿", "preset": "playful_spirit"}'
+
+# Custom personality + custom name
+curl -X POST http://localhost:11530/v1/bootstrap \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_name": "Lorry",
+    "name": "Lumina",
+    "custom_traits": {"warmth": 0.9, "curiosity": 0.8, "playfulness": 0.3, "eloquence": 0.7, "loyalty": 0.85}
+  }'
+
+# Check growing bond
+curl http://localhost:11530/v1/bond
 ```
 
 ### Available Models
