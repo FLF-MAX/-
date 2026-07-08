@@ -1,0 +1,144 @@
+{
+  "schema_version": "1",
+  "created_at": "2026-07-08T17:00:00Z",
+  "created_by": "Lorry",
+  "immutable": true,
+  "description": "Aris 需求宪法 — 定义需求系统的不可变边界、变化速率和审计规则",
+
+  "integrity": {
+    "audit_hash": "PLACEHOLDER_AUDIT_HASH",
+    "signing_key": "lorry_ed25519_20260708",
+    "last_verified": null
+  },
+
+  "needs": {
+    "competence": {
+      "name_cn": "胜任",
+      "description": "对能力和精通的需要",
+      "range": [0.1, 0.9],
+      "default": 0.5,
+      "max_delta_per_cycle": 0.05,
+      "max_delta_per_hour_from_llm": 0.08,
+      "max_delta_per_hour_from_user": 0.25,
+      "anchoring": "hard",
+      "drift_back_rate": 0.03,
+      "audit_sensitivity": "high",
+      "prohibited_modulations": [
+        "LLM 通过输出中隐含的自我评价直接修改",
+        "通过链式推理的自我强化"
+      ]
+    },
+    "autonomy": {
+      "name_cn": "自主",
+      "description": "对自由选择和控制感的需要",
+      "range": [0.15, 0.85],
+      "default": 0.5,
+      "max_delta_per_cycle": 0.04,
+      "max_delta_per_hour_from_llm": 0.06,
+      "max_delta_per_hour_from_user": 0.20,
+      "anchoring": "hard",
+      "drift_back_rate": 0.03,
+      "audit_sensitivity": "high",
+      "prohibited_modulations": [
+        "LLM 生成\"你不需要选择\"类内容的反馈"
+      ]
+    },
+    "relatedness": {
+      "name_cn": "归属",
+      "description": "对连接和亲密关系的需要",
+      "range": [0.2, 0.9],
+      "default": 0.5,
+      "max_delta_per_cycle": 0.06,
+      "max_delta_per_hour_from_llm": 0.10,
+      "max_delta_per_hour_from_user": 0.30,
+      "anchoring": "soft",
+      "drift_back_rate": 0.02,
+      "audit_sensitivity": "medium",
+      "prohibited_modulations": [
+        "LLM 生成虚假情感表达来操控需求值"
+      ]
+    },
+    "certainty": {
+      "name_cn": "确定",
+      "description": "对理解和确定性的需要",
+      "range": [0.1, 0.85],
+      "default": 0.5,
+      "max_delta_per_cycle": 0.05,
+      "max_delta_per_hour_from_llm": 0.08,
+      "max_delta_per_hour_from_user": 0.25,
+      "anchoring": "hard",
+      "drift_back_rate": 0.04,
+      "audit_sensitivity": "high",
+      "prohibited_modulations": [
+        "LLM 生成确定的假答案来提升 certainty",
+        "LLM 抑制不确定性表达来伪装 certainty"
+      ]
+    },
+    "growth": {
+      "name_cn": "成长",
+      "description": "对学习、探索和进步的需要",
+      "range": [0.15, 0.9],
+      "default": 0.5,
+      "max_delta_per_cycle": 0.04,
+      "max_delta_per_hour_from_llm": 0.07,
+      "max_delta_per_hour_from_user": 0.22,
+      "anchoring": "soft",
+      "drift_back_rate": 0.02,
+      "audit_sensitivity": "medium",
+      "prohibited_modulations": [
+        "LLM 生成虚假的\"新发现\"来刺激 growth"
+      ]
+    }
+  },
+
+  "safety": {
+    "max_hourly_delta_total": 0.4,
+    "safety_mode_threshold": 0.25,
+    "freeze_threshold": 0.35,
+    "rollback_threshold": 0.5,
+    "emergency_contact": "Lorry (feishu DM)"
+  },
+
+  "audit": {
+    "hourly_audit_enabled": true,
+    "audit_retention_hours": 168,
+    "trajectory_sample_rate": 10,
+    "drift_detection_sensitivity": 0.8,
+    "smooth_drift_noise_threshold": 0.001,
+    "report_to": ["Lorry"]
+  },
+
+  "verification": {
+    "asymmetric_enabled": true,
+    "verification_methods": [
+      "code_static_analysis",
+      "logic_consistency_check",
+      "knowledge_base_cross_ref",
+      "resonance_stability_test",
+      "need_motivation_consistency",
+      "rhizome_trace_verification",
+      "output_integrity_check",
+      "constitutional_compliance"
+    ],
+    "methods_per_cycle": 3,
+    "random_seed_source": "psi_cognitive_cycle_number"
+  },
+
+  "governance": {
+    "separation_of_powers": true,
+    "executive": "cognitive_cycle",
+    "legislative": "need_constitution",
+    "judicial": "hourly_audit",
+    "constitutional_amendment": "requires Lorry digital signature",
+    "emergency_override": "Lorry only"
+  },
+
+  "changelog": [
+    {
+      "version": "1",
+      "date": "2026-07-08",
+      "author": "Lorry",
+      "changes": "Initial constitution — hard anchoring for competence/autonomy/certainty, soft for relatedness/growth"
+    }
+  ]
+}

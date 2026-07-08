@@ -99,10 +99,13 @@ User Message
 | Module | File | Role |
 |--------|------|------|
 | **CognitiveBus** | cognitive_bus.py | PSI→LLM routing with 4-level decision |
+| **PsiSemiotics** | psi_semiotics/ | Symbolic reasoning engine + HoTT (Homotopy Type Theory) integration. Mathematical cognition layer. |
+| **PsiJSpace** | psi_jspace_bridge/ | Governor three-power governance (constitution/verification/audit). Runtime safety for autonomous systems. |
 | **RulesEngine** | aris_rules_engine.py | Zero-LLM task execution. 7 rules × 7 tools. Pattern-matching intent resolution. |
 | **EpisodicMemory** | aris_episodic_memory.py | Store and recall past interactions. Similarity-based case retrieval. |
 | **EmotionEngine** | aris_emotion_engine.py | Hormone system + need hierarchy + mirror neuron emulation. |
 | **Subconscious** | aris_subconscious.py | V12.5 Markov-quantum intuition generator. 17M n-gram corpus. |
+| **DenseKernel** | aris_v12_dense_kernel.py | V12 dense quantum kernel for high-dimensional semantic operations. |
 | **DesireEngine** | aris_desire_engine.py | Autonomous goal generation from need states. |
 | **GoalEngine** | aris_goal_engine.py | Perceive → generate → evaluate → select → execute pipeline. |
 
@@ -181,20 +184,63 @@ print(result)
 
 ---
 
+## Agent Framework Integration
+
+LAAP exposes an **OpenAI-compatible API** — any framework that supports custom LLM endpoints can use LAAP as its cognitive backend.
+
+### Supported Frameworks
+
+| Framework | Config | Docs |
+|-----------|--------|------|
+| **Hermes Agent** | `llm.provider: custom` → `http://localhost:11530/v1` | [Guide](references/agent-integration-guide.md) |
+| **OpenClaw** | `llm.api_base: http://localhost:11530/v1` | [Guide](references/agent-integration-guide.md) |
+| **OpenCode** | `OPENAI_BASE_URL=http://localhost:11530/v1` | [Guide](references/agent-integration-guide.md) |
+
+### Start the API
+
+```bash
+python aris_brain/laap_brain_api.py
+# Listening on :11530, OpenAI-compatible /v1/chat/completions
+```
+
+### Available Models
+
+| Model | Engine | Use Case | Latency |
+|-------|--------|----------|---------|
+| `laap-core` | Full cognitive stack | General reasoning | ~500ms |
+| `laap-qre` | QRE quantum reasoning | Deep analysis | ~200μs |
+| `laap-rules` | RulesEngine | Deterministic tasks | ~50ms |
+
+---
+
 ## Project Structure
 
 ```
 laap-open/
-├── aris_brain/          # Core engine (25+ modules)
-│   ├── laap_integrator.py    # Singleton module loader
-│   ├── aris_start_all.py     # Full-stack launcher
-│   ├── aris_watchdog.py      # Process supervisor (7 processes)
-│   ├── cognitive_bus.py      # PSI→LLM routing
-│   ├── aris_rules_engine.py  # Zero-LLM task execution
-│   ├── aris_emotion_engine.py# Hormone system
-│   ├── aris_subconscious.py  # V12.5 intuition generator
+├── aris_brain/             # Core engine (30+ modules)
+│   ├── laap_integrator.py      # Singleton module loader
+│   ├── laap_brain_api.py       # OpenAI-compatible API (:11530)
+│   ├── aris_start_all.py       # Full-stack launcher
+│   ├── aris_watchdog.py        # Process supervisor
+│   ├── cognitive_bus.py        # PSI→LLM routing
+│   ├── aris_rules_engine.py    # Zero-LLM task execution
+│   ├── aris_emotion_engine.py  # Hormone system
+│   ├── aris_subconscious.py    # V12.5 intuition generator
+│   ├── aris_v12_dense_kernel.py # Dense quantum kernel
+│   ├── quantum_bridge.py       # Quantum bridge
+│   ├── psi_semiotics/          # Symbolic reasoning + HoTT
+│   │   ├── psi_semiotics_core.py   # Core semiotics engine
+│   │   ├── psilang_hott.py         # HoTT integration
+│   │   ├── psi_embedding.py        # Semantic embedding
+│   │   ├── structured_encoder.py   # Structured encoding
+│   │   └── ...
+│   ├── psi_jspace_bridge/      # Governor + Hermes adapter
+│   │   ├── governor/              # Three-power governance
+│   │   ├── psi_hermes_adapter.py  # Hermes integration
+│   │   ├── psi_runtime_protocol.py
+│   │   └── ...
 │   └── ...
-├── laap/agi/            # AGI engines
+├── laap/agi/               # AGI engines
 │   ├── causal.py            # CausalEngine
 │   ├── analogical.py        # AnalogicalEngine
 │   └── world_model.py       # WorldModel
