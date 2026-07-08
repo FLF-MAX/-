@@ -6,6 +6,8 @@ xiaozhi_mcp_token.txt
 
 # ========== 运行时状态 ==========
 state/
+state/*.json
+state/**/*.json
 snapshots/
 logs/
 *.log
