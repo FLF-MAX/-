@@ -1,4 +1,8 @@
 
+<p align="center">
+  <img src="assets/laap-logo.svg" width="600" alt="LAAP AGI Logo"/>
+</p>
+
 # LAAP · Living Agent Application Protocol
 
 ### Zero-LLM Cognitive Architecture for Digital Lifeforms

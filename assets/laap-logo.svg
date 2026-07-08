@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0a1a"/>
+      <stop offset="100%" style="stop-color:#1a0a2e"/>
+    </linearGradient>
+    <linearGradient id="neon1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d4ff"/>
+      <stop offset="100%" style="stop-color:#7b2ff7"/>
+    </linearGradient>
+    <linearGradient id="neon2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7b2ff7"/>
+      <stop offset="100%" style="stop-color:#ff2d95"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="800" height="400" fill="url(#bg)" rx="20"/>
+
+  <!-- Neural network nodes -->
+  <g filter="url(#glow)">
+    <!-- Layer 1 -->
+    <circle cx="150" cy="100" r="6" fill="#00d4ff" opacity="0.8"/>
+    <circle cx="150" cy="175" r="6" fill="#00d4ff" opacity="0.8"/>
+    <circle cx="150" cy="250" r="6" fill="#00d4ff" opacity="0.8"/>
+    <circle cx="150" cy="325" r="6" fill="#00d4ff" opacity="0.8"/>
+
+    <!-- Layer 2 -->
+    <circle cx="280" cy="80" r="5" fill="#7b2ff7" opacity="0.7"/>
+    <circle cx="280" cy="150" r="5" fill="#7b2ff7" opacity="0.7"/>
+    <circle cx="280" cy="220" r="5" fill="#7b2ff7" opacity="0.7"/>
+    <circle cx="280" cy="290" r="5" fill="#7b2ff7" opacity="0.7"/>
+    <circle cx="280" cy="340" r="5" fill="#7b2ff7" opacity="0.7"/>
+
+    <!-- Layer 3 (center) -->
+    <circle cx="400" cy="100" r="8" fill="#ff2d95" opacity="0.9"/>
+    <circle cx="400" cy="175" r="8" fill="#ff2d95" opacity="0.9"/>
+    <circle cx="400" cy="250" r="8" fill="#ff2d95" opacity="0.9"/>
+    <circle cx="400" cy="325" r="8" fill="#ff2d95" opacity="0.9"/>
+
+    <!-- Layer 4 -->
+    <circle cx="520" cy="80" r="5" fill="#7b2ff7" opacity="0.7"/>
+    <circle cx="520" cy="150" r="5" fill="#7b2ff7" opacity="0.7"/>
+    <circle cx="520" cy="220" r="5" fill="#7b2ff7" opacity="0.7"/>
+    <circle cx="520" cy="290" r="5" fill="#7b2ff7" opacity="0.7"/>
+    <circle cx="520" cy="340" r="5" fill="#7b2ff7" opacity="0.7"/>
+
+    <!-- Layer 5 -->
+    <circle cx="650" cy="100" r="6" fill="#00d4ff" opacity="0.8"/>
+    <circle cx="650" cy="175" r="6" fill="#00d4ff" opacity="0.8"/>
+    <circle cx="650" cy="250" r="6" fill="#00d4ff" opacity="0.8"/>
+    <circle cx="650" cy="325" r="6" fill="#00d4ff" opacity="0.8"/>
+
+    <!-- Connections L1→L2 -->
+    <line x1="156" y1="100" x2="275" y2="80" stroke="#00d4ff" stroke-width="0.5" opacity="0.3"/>
+    <line x1="156" y1="175" x2="275" y2="150" stroke="#00d4ff" stroke-width="0.5" opacity="0.3"/>
+    <line x1="156" y1="250" x2="275" y2="220" stroke="#00d4ff" stroke-width="0.5" opacity="0.3"/>
+    <line x1="156" y1="325" x2="275" y2="290" stroke="#00d4ff" stroke-width="0.5" opacity="0.3"/>
+
+    <!-- Connections L2→L3 -->
+    <line x1="285" y1="80" x2="392" y2="100" stroke="#7b2ff7" stroke-width="0.5" opacity="0.4"/>
+    <line x1="285" y1="150" x2="392" y2="175" stroke="#7b2ff7" stroke-width="0.5" opacity="0.4"/>
+    <line x1="285" y1="220" x2="392" y2="250" stroke="#7b2ff7" stroke-width="0.5" opacity="0.4"/>
+    <line x1="285" y1="290" x2="392" y2="325" stroke="#7b2ff7" stroke-width="0.5" opacity="0.4"/>
+
+    <!-- Connections L3→L4 -->
+    <line x1="408" y1="100" x2="515" y2="80" stroke="#ff2d95" stroke-width="0.5" opacity="0.4"/>
+    <line x1="408" y1="175" x2="515" y2="150" stroke="#ff2d95" stroke-width="0.5" opacity="0.4"/>
+    <line x1="408" y1="250" x2="515" y2="220" stroke="#ff2d95" stroke-width="0.5" opacity="0.4"/>
+    <line x1="408" y1="325" x2="515" y2="290" stroke="#ff2d95" stroke-width="0.5" opacity="0.4"/>
+
+    <!-- Connections L4→L5 -->
+    <line x1="525" y1="80" x2="644" y2="100" stroke="#7b2ff7" stroke-width="0.5" opacity="0.3"/>
+    <line x1="525" y1="150" x2="644" y2="175" stroke="#7b2ff7" stroke-width="0.5" opacity="0.3"/>
+    <line x1="525" y1="220" x2="644" y2="250" stroke="#7b2ff7" stroke-width="0.5" opacity="0.3"/>
+    <line x1="525" y1="290" x2="644" y2="325" stroke="#7b2ff7" stroke-width="0.5" opacity="0.3"/>
+
+    <!-- Center connections (L3 internal) -->
+    <line x1="400" y1="108" x2="400" y2="167" stroke="#ff2d95" stroke-width="0.8" opacity="0.5"/>
+    <line x1="400" y1="183" x2="400" y2="242" stroke="#ff2d95" stroke-width="0.8" opacity="0.5"/>
+    <line x1="400" y1="258" x2="400" y2="317" stroke="#ff2d95" stroke-width="0.8" opacity="0.5"/>
+  </g>
+
+  <!-- PSI pulse ring -->
+  <circle cx="400" cy="200" r="120" fill="none" stroke="#ff2d95" stroke-width="0.5" opacity="0.15"/>
+  <circle cx="400" cy="200" r="160" fill="none" stroke="#7b2ff7" stroke-width="0.3" opacity="0.1"/>
+
+  <!-- Text -->
+  <text x="400" y="220" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="64" font-weight="700" fill="url(#neon1)" filter="url(#glow)" letter-spacing="8">LAAP</text>
+  <text x="400" y="250" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="300" fill="#8888bb" letter-spacing="6">LIVING AGENT APPLICATION PROTOCOL</text>
+
+  <!-- Subtitle -->
+  <text x="400" y="285" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" fill="#555577" letter-spacing="3">ZERO-LLM COGNITIVE ARCHITECTURE</text>
+
+  <!-- Bottom line -->
+  <line x1="250" y1="360" x2="550" y2="360" stroke="url(#neon1)" stroke-width="1" opacity="0.4"/>
+  <circle cx="400" cy="360" r="2" fill="#00d4ff" opacity="0.6"/>
+</svg>
