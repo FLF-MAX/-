@@ -8,6 +8,7 @@ xiaozhi_mcp_token.txt
 state/
 state/*.json
 state/**/*.json
+!state/.gitkeep
 snapshots/
 logs/
 *.log
