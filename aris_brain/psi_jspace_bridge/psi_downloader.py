@@ -102,10 +102,10 @@ MODELS = {
     },
 }
 
-INSTALL_DIR = os.path.abspath(os.path.join(
-    os.path.dirname(__file__), "..", "..", "..",
-    "laap_models"
-))
+# 模型下载目录：可通过 LAAP_MODELS_DIR 环境变量覆盖
+# 默认放在项目根目录的同级 laap_models 文件夹下
+_DEFAULT_MODELS_DIR = str(Path(__file__).resolve().parents[3] / "laap_models")
+INSTALL_DIR = os.path.abspath(os.environ.get("LAAP_MODELS_DIR", _DEFAULT_MODELS_DIR))
 
 
 def list_available_models() -> Dict:
@@ -133,7 +133,7 @@ def download_model(model_name: str,
     Args:
         model_name: 模型名称 (MODELS 字典的 key)
         quantization: 量化级别
-        output_dir: 输出目录 (默认: D:/LAAP/laap_models/)
+        output_dir: 输出目录 (默认: LAAP_MODELS_DIR 环境变量或项目根同级 laap_models/)
     
     Returns:
         下载的模型文件路径

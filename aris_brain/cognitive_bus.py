@@ -26,7 +26,8 @@ from typing import Optional, Dict, Any, Literal
 logger = logging.getLogger("aris.cognitive_bus")
 
 # ─── 路径配置 ────────────────────────────────────────────────
-STATE_DIR = Path(os.environ.get("ARIS_STATE_DIR", "D:/LAAP/aris_brain/state"))
+from laap_brain.config import STATE_DIR as _CONFIG_STATE_DIR
+STATE_DIR = Path(os.environ.get("ARIS_STATE_DIR", str(_CONFIG_STATE_DIR)))
 STATE_FILE = STATE_DIR / "latest.json"
 INPUT_QUEUE = STATE_DIR / "input_queue.json"
 
@@ -47,10 +48,12 @@ class CognitiveBus:
 
     def __init__(
         self,
-        state_dir: str = "D:/LAAP/aris_brain/state",
+        state_dir: str = None,
         poll_interval_us: int = 100,
         max_poll_attempts: int = 60,
     ):
+        if state_dir is None:
+            state_dir = str(STATE_DIR)
         self.state_dir = Path(state_dir)
         self.state_file = self.state_dir / "latest.json"
         self.input_queue = self.state_dir / "input_queue.json"
@@ -380,7 +383,7 @@ class CognitiveBus:
     def _read_agi_output(self) -> str:
         """读取 AGI 模块的最新输出（如果存在且有新内容）。"""
         try:
-            agi_file = Path("D:/LAAP/aris_brain/state/agi_output.json")
+            agi_file = STATE_DIR / "agi_output.json"
             if not agi_file.exists():
                 return ""
 

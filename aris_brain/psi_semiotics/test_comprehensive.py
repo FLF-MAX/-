@@ -11,20 +11,20 @@
 """
 
 import sys, os
-sys.path.insert(0, "D:/LAAP/aris_brain")
-sys.path.insert(0, "D:/LAAP/aris_brain/psi_semiotics")
+sys.path.insert(0, "D:/laap-AGI/aris_brain")
+sys.path.insert(0, "D:/laap-AGI/aris_brain/psi_semiotics")
 
 import numpy as np
 import time
 import logging
 logging.basicConfig(level=logging.WARNING)
 
-from psi_semiotics.psi_semiotics_core import (
+from psi_semiotics_core import (
     PsiSemioticsEngine, Rotor, Multivector, Symbol, _hash_to_vec
 )
 
 # 确保使用结构化编码器
-from psi_semiotics.structured_encoder import StructuredSemanticEncoder
+from structured_encoder import StructuredSemanticEncoder
 enc = StructuredSemanticEncoder(output_dim=1024)
 
 

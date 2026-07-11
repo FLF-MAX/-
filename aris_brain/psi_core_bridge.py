@@ -19,6 +19,9 @@ import os
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+# LAAP 统一配置
+from laap_brain.config import STATE_DIR
+
 # LAAP AGI CognitiveBus
 from laap.agi.cognitive_bus import (
     CognitiveBus,
@@ -163,10 +166,17 @@ class PsiCoreBridge:
 
     def __init__(
         self,
-        state_dir: str = "D:/LAAP/aris_brain/state",
+        state_dir: str = None,
         bus: Optional[CognitiveBus] = None,
         poll_interval: float = 0.1,  # 100ms
     ):
+        if state_dir is None:
+            try:
+                from laap_brain.config import STATE_DIR
+                state_dir = str(STATE_DIR)
+            except ImportError:
+                state_dir = str(Path(os.environ.get("ARIS_BRAIN_ROOT",
+                    str(Path(__file__).resolve().parent))) / "state")
         self.state_file = str(Path(state_dir) / "latest.json")
         self.bus = bus or get_global_bus()
         self.poll_interval = poll_interval

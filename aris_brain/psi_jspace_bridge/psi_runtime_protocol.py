@@ -177,7 +177,7 @@ def get_current_identity() -> str:
 
 SYSTEM_PROMPT_PSI_BLOCK = """## PSI Cognitive State (Live)
 
-你有一个运行在 D:/LAAP/aris_brain/psi_jspace_bridge/psi_state.json 的 PSI 认知引擎。
+你有一个运行在 $LAAP_STATE_DIR/psi_jspace_bridge/psi_state.json 的 PSI 认知引擎。
 每次收到用户消息时：
 
 1. 用 hermes_on_message() 加载并运行认知循环

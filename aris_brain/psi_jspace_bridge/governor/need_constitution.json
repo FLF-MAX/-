@@ -7,7 +7,7 @@
 
   "integrity": {
     "audit_hash": "PLACEHOLDER_AUDIT_HASH",
-    "signing_key": "lorry_ed25519_20260708",
+    "signing_key": "${CONSTITUTION_SIGNING_KEY}",
     "last_verified": null
   },
 

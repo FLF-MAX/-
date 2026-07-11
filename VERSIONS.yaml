@@ -1,0 +1,106 @@
+# LAAP Version Compatibility
+# ===========================
+# 记录 LAAP 与 Hermes 以及其他依赖的版本对齐关系。
+# Hermes 版本使用 semantic versioning (major.minor.patch)。
+
+laap:
+  version: "1.0.0"
+  release_date: "2026-07-11"
+  description: "Lifeform Architecture for Autonomous Psyche — cognitive engine"
+
+hermes_compatibility:
+  # LAAP 1.0.x 兼容 Hermes 0.18.x
+  - laap_version: "1.0.x"
+    hermes_version: "0.18.x"
+    hermes_min: "0.18.0"
+    hermes_max: "0.19.0"
+    status: "stable"
+    notes: "Full cognitive integration via HermesIntegrator"
+
+  # LAAP 1.0.x 兼容 Hermes 0.17.x (降级模式)
+  - laap_version: "1.0.x"
+    hermes_version: "0.17.x"
+    hermes_min: "0.17.0"
+    hermes_max: "0.18.0"
+    status: "compat"
+    notes: "Reduced feature set — PSI core and emotional engine only"
+
+dependencies:
+  python: ">=3.11,<3.14"
+  hermes_agent: ">=0.18.0,<0.19"
+  aiohttp: ">=3.9.0,<4"
+  pyyaml: ">=6.0,<7"
+  psutil: ">=5.9,<7"
+
+components:
+  aris_brain:
+    description: "Core cognitive architecture (CognitiveBridge, RulesEngine, EmotionEngine)"
+    path: "aris_brain/"
+    status: "stable"
+
+  laap_brain:
+    description: "Unified integration interface (HermesIntegrator, API server)"
+    path: "laap_brain/"
+    status: "stable"
+
+  psi_core:
+    description: "Rust PSI core engine (2000Hz cognitive cycle)"
+    path: "aris_brain/psi_jspace_bridge/"
+    status: "stable"
+
+  psi_semiotics:
+    description: "PSI Semiotics — symbolic reasoning and embedding"
+    path: "aris_brain/psi_semiotics/"
+    status: "stable"
+
+  hermes_integration:
+    description: "Hermes Agent bridge scripts and configs"
+    path: "hermes-integration/"
+    status: "stable"
+
+  mcp_server:
+    description: "MCP server for LAAP cognitive tools"
+    path: "mcp_server/"
+    status: "stable"
+
+integration_points:
+  - name: "HermesIntegrator"
+    description: "Formal integration interface — replaces install_laap() monkey-patch"
+    type: "class"
+    module: "laap_brain.integrator"
+    status: "active"
+
+  - name: "CognitiveState API"
+    description: "OpenAI-compatible HTTP endpoint exposing LAAP cognitive stack"
+    type: "http"
+    module: "laap_brain.api"
+    port: 11530
+    status: "active"
+
+  - name: "HermesChannel"
+    description: "Aris Voice Cortex — uses Hermes AIAgent as LLM backend"
+    type: "class"
+    module: "aris_brain.hermes_channel"
+    status: "active"
+
+  - name: "HermesToolBridge"
+    description: "Registers LAAP tools in Hermes tool registry"
+    type: "class"
+    module: "laap.agent_core.hermes_tool_bridge"
+    status: "active"
+
+  - name: "AGCognitiveBridge"
+    description: "AGI bridge hooking into Hermes AIAgent lifecycle"
+    type: "class"
+    module: "laap_brain.agi_bridge"
+    status: "active"
+
+  - name: "HandshakeProtocol"
+    description: "Cross-process IPC between Ao and Aris"
+    type: "protocol"
+    module: "laap.handshake"
+    status: "active"
+
+checksums:
+  policy: "Run `python -m laap_brain check-versions` to verify compatibility"
+  last_verified: null

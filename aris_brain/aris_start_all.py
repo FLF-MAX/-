@@ -17,20 +17,10 @@ logger = logging.getLogger(__name__)
 import sys, os, json, time
 from pathlib import Path
 
-BRAIN = Path("D:/LAAP/aris_brain")
-sys.path.insert(0, str(BRAIN))
-
-# ── LAAP Tools — 从官方 Hermes v0.17.0 提取的外部工具集 ──
-# LAAP 是独立外脑，Hermes 是身体。这些工具随 LAAP 版本维护，
-# 不依赖特定 Hermes 版本。Hermes 更新后只需重新对比提取新文件。
-LAAP_TOOLS = BRAIN / "laap_tools"
-if LAAP_TOOLS.exists():
-    sys.path.insert(0, str(LAAP_TOOLS))
-    # 子目录也加入 path（保持与官方相同的包结构）
-    for subdir in ["agent", "gateway", "tools"]:
-        p = LAAP_TOOLS / subdir
-        if p.exists():
-            sys.path.insert(0, str(p))
+from laap_brain.config import BRAIN_DIR as BRAIN, LAAP_ROOT, setup_dirs
+_root = str(LAAP_ROOT)
+if _root not in sys.path:
+    sys.path.insert(0, _root)
 
 os.chdir(str(BRAIN))
 

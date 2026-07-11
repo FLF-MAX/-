@@ -74,7 +74,7 @@ python3 -c "
 from llama_cpp import Llama
 from psi_sampler import PsiLlamaCppWrapper
 
-llm = Llama('D:/LAAP/laap_models/Qwen2.5-72B-Instruct-Q4_K_M.gguf')
+llm = Llama('/path/to/laap_models/Qwen2.5-72B-Instruct-Q4_K_M.gguf')
 psi_llm = PsiLlamaCppWrapper(llm, psi_enabled=True)
 
 # PSI 调制的生成
@@ -104,7 +104,7 @@ response = psi_llm.generate('解释量子核的原理')
 ## 关键文件路径
 
 ```
-D:/LAAP/aris_brain/psi_jspace_bridge/
+$LAAP_ROOT/aris_brain/psi_jspace_bridge/
 ├── psi_state.json          ← 运行时状态文件
 ├── psi_bridge.py           ← 认知引擎
 ├── psi_hermes_adapter.py   ← Hermes 适配

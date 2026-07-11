@@ -35,7 +35,12 @@ import numpy as np
 
 logger = logging.getLogger("aris.quantum_bridge")
 
-ARIS_HOME = Path("D:/LAAP/aris_brain")
+# 从统一配置导入路径（支持环境变量覆盖）
+try:
+    from laap_brain.config import BRAIN_DIR as ARIS_HOME
+except ImportError:
+    ARIS_HOME = Path(os.environ.get("ARIS_BRAIN_ROOT",
+        str(Path(__file__).resolve().parent)))
 
 # 延迟导入 — 只在桥接激活时加载（避免循环依赖）
 _QUANTUM_AVAILABLE = False

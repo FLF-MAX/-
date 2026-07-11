@@ -1,8 +1,16 @@
-# ========== 环境文件 ==========
+# ========== 环境文件 / 密钥 ==========
 .env
 .env.local
 .env.production
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
 xiaozhi_mcp_token.txt
+*_token.txt
+*_secret.txt
 
 # ========== 运行时状态 ==========
 state/

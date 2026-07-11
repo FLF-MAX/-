@@ -16,6 +16,7 @@ agent）在推理时调用的协处理器。
 """
 
 import json
+import logging
 import os
 import time
 import hashlib
@@ -133,12 +134,16 @@ class PsiBridge:
         if extra:
             state_data.update(extra)
 
-        # 原子写入
-        os.makedirs(os.path.dirname(self.state_path), exist_ok=True)
-        tmp = self.state_path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(state_data, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, self.state_path)
+        # 原子写入（如果目录不可写则降级为内存状态）
+        try:
+            os.makedirs(os.path.dirname(self.state_path), exist_ok=True)
+            tmp = self.state_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(state_data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, self.state_path)
+        except OSError as e:
+            logger = logging.getLogger("psi.bridge")
+            logger.warning(f"PSI state persistence disabled (directory not writable): {e}")
         return state_data
 
     def _generate_session_id(self) -> str:

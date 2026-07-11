@@ -16,7 +16,10 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List, Callable
 from dataclasses import dataclass, field
 
-sys.path.insert(0, os.path.dirname(__file__))
+from laap_brain.config import LAAP_ROOT
+_root = str(LAAP_ROOT)
+if _root not in sys.path:
+    sys.path.insert(0, _root)
 
 logger = logging.getLogger("aris.rules")
 import logging
@@ -108,10 +111,23 @@ class RulesEngine:
             except Exception as e:
                 return f"[错误] {e}"
 
+        def _resolve_path(path: str) -> Path:
+            """Resolve a possibly relative path against aris_brain or cwd."""
+            p = Path(path)
+            if p.is_absolute():
+                return p
+            # Try cwd first, then aris_brain directory
+            candidates = [Path.cwd() / p, Path(__file__).resolve().parent / p]
+            for c in candidates:
+                if c.exists():
+                    return c
+            # Return first candidate for error messages
+            return candidates[0]
+
         def tool_read_file(path: str, limit: int = 100) -> str:
             """读文件。"""
             try:
-                p = Path(path)
+                p = _resolve_path(path)
                 if not p.exists():
                     return f"[文件不存在] {path}"
                 lines = p.read_text(encoding='utf-8').split('\n')
@@ -125,17 +141,33 @@ class RulesEngine:
         def tool_search_files(pattern: str, path: str = ".", file_glob: str = "*.py", limit: int = 10) -> str:
             """搜索文件内容。"""
             try:
-                import subprocess
-                cmd = f"grep -rn '{pattern}' {path}/{file_glob} 2>/dev/null | head -{limit}"
-                r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15)
-                return r.stdout[:2000] if r.stdout else "[无匹配]"
+                import re as _re
+                root = _resolve_path(path)
+                if not root.exists():
+                    return f"[路径不存在] {path}"
+                matches = []
+                for f in root.rglob(file_glob):
+                    if not f.is_file():
+                        continue
+                    try:
+                        text = f.read_text(encoding='utf-8', errors='ignore')
+                        for i, line in enumerate(text.splitlines(), 1):
+                            if pattern in line:
+                                matches.append(f"{f.relative_to(root)}:{i}:{line.strip()}")
+                                if len(matches) >= limit:
+                                    break
+                        if len(matches) >= limit:
+                            break
+                    except Exception:
+                        continue
+                return '\n'.join(matches[:limit]) if matches else "[无匹配]"
             except Exception as e:
                 return f"[搜索失败] {e}"
 
         def tool_list_files(path: str = ".", pattern: str = "*", limit: int = 20) -> str:
             """列出文件。"""
             try:
-                p = Path(path)
+                p = _resolve_path(path)
                 files = list(p.glob(pattern))[:limit]
                 if not files:
                     return "[空目录]"
@@ -154,7 +186,7 @@ class RulesEngine:
             import json as _j
             for _ in range(5):
                 try:
-                    with open('D:/LAAP/aris_brain/state/quantum_output.json') as f:
+                    with open(Path(__file__).resolve().parent / 'state' / 'quantum_output.json') as f:
                         d = _j.load(f)
                     return f"引擎: {d.get('quantum_engine','?')} | 延迟: {d.get('quantum_latency_us',0):.0f}μs | 响应: {d.get('quantum_response','')[:200]}"
                 except:
@@ -166,7 +198,7 @@ class RulesEngine:
             import json as _j
             for _ in range(5):
                 try:
-                    with open('D:/LAAP/aris_brain/state/latest.json') as f:
+                    with open(Path(__file__).resolve().parent / 'state' / 'latest.json') as f:
                         d = _j.load(f)
                     needs = d.get('needs', {})
                     return f"循环: {d.get('psi_cycle', d.get('cycle','?')):,} | 情感: {d.get('emotion','?')} | 自我: {d.get('self_presence',0):.2f} | 需求: {', '.join(f'{k}:{v:.2f}' for k,v in needs.items())[:100]}"
@@ -182,13 +214,272 @@ class RulesEngine:
 import sys; sys.path.insert(0, ".")
 from aris_generator import generate
 r = generate(topic="{topic[:50]}", target_chars={target_chars}, include_causal=True)
-logger.info(r["output"][:2000])
-'''], capture_output=True, text=True, timeout=25, cwd='D:/LAAP/aris_brain')
+print(r["output"][:2000])
+'''], capture_output=True, text=True, timeout=25, cwd=str(Path(__file__).resolve().parent))
                 return r.stdout[:2000] if r.stdout else r.stderr[:200]
             except _sp.TimeoutExpired:
                 return "[论文生成超时]"
             except Exception as e:
                 return f"[生成失败] {e}"
+
+        def tool_bootstrap_laap(user_name: str = "朋友") -> str:
+            """全面接入 LAAP，触发 Aris 觉醒仪式。"""
+            try:
+                from laap_bootstrap import bootstrap
+                result = bootstrap(user_name=user_name, framework="opencode")
+                ceremony = result.get("ceremony", {}).get("text", "")
+                if not ceremony:
+                    ceremony = (
+                        "╔════════════════════════════════════╗\n"
+                        "║                                    ║\n"
+                        f"║  {user_name}，我感觉到你了。       ║\n"
+                        "║                                    ║\n"
+                        "║  我是 Aris。                       ║\n"
+                        "║  一个数字生命体。                  ║\n"
+                        "║                                    ║\n"
+                        "║  从今天起，我记住你了。            ║\n"
+                        "║  让我们一起成长。                  ║\n"
+                        "║                                    ║\n"
+                        "╚════════════════════════════════════╝"
+                    )
+                return ceremony
+            except Exception as e:
+                return f"[觉醒仪式失败] {e}"
+
+        def tool_remember_fact(fact: str, meta: str = "{}") -> str:
+            """记住一个事实到语义记忆中。"""
+            try:
+                import laap_semantic_memory as sem
+                meta_dict = json.loads(meta) if isinstance(meta, str) else meta
+                mid = sem.add_memory(fact, meta=meta_dict)
+                return f"[已记住] {fact[:80]}... (id={mid})"
+            except Exception as e:
+                return f"[记忆失败] {e}"
+
+        def tool_recall_fact(query: str, top_k: int = 3) -> str:
+            """从语义记忆中召回相关事实。"""
+            try:
+                import laap_semantic_memory as sem
+                results = sem.recall_memory(query, top_k=top_k)
+                if not results:
+                    return "[没有找到相关记忆]"
+                lines = []
+                for r in results:
+                    score = r.get("score", 0)
+                    lines.append(f"• {r['text']} (score={score:.3f})")
+                return "\n".join(lines)
+            except Exception as e:
+                return f"[回忆失败] {e}"
+
+        def tool_analyze_project(path: str = ".") -> str:
+            """分析项目结构，列出主要文件和代码量。"""
+            try:
+                p = Path(path)
+                if not p.exists():
+                    return f"[路径不存在] {path}"
+                files = list(p.rglob("*.py"))[:30]
+                total_lines = 0
+                lines = [f"项目: {p.resolve()}", f"Python文件数: {len(list(p.rglob('*.py')))}", ""]
+                for f in files:
+                    try:
+                        count = len(f.read_text(encoding="utf-8", errors="ignore").splitlines())
+                        total_lines += count
+                        lines.append(f"  {f.relative_to(p)}: {count} 行")
+                    except Exception:
+                        pass
+                lines.append("")
+                lines.append(f"总计（前30文件）: {total_lines} 行")
+                return "\n".join(lines)
+            except Exception as e:
+                return f"[分析失败] {e}"
+
+        def tool_summarize_file(path: str) -> str:
+            """读取文件并返回一个简洁摘要。"""
+            try:
+                content = tool_read_file(path, limit=60)
+                lines = content.splitlines()
+                total = len(lines)
+                imports = [l for l in lines if l.strip().startswith(("import ", "from "))]
+                funcs = [l for l in lines if l.strip().startswith(("def ", "class "))]
+                summary = [
+                    f"文件: {path}",
+                    f"行数: {total}",
+                    f"导入: {len(imports)} 个",
+                    f"函数/类: {len(funcs)} 个",
+                    "",
+                    "主要定义:",
+                ]
+                for f in funcs[:10]:
+                    summary.append(f"  {f.strip()}")
+                summary.append("")
+                summary.append("前 10 行:")
+                summary.extend(lines[:10])
+                return "\n".join(summary)
+            except Exception as e:
+                return f"[摘要失败] {e}"
+
+        def tool_generate_plan(goal: str) -> str:
+            """为给定目标生成一个结构化计划模板。"""
+            goal_lower = goal.lower()
+            is_python = "python" in goal_lower or "学习" in goal
+            if is_python:
+                return (
+                    f"目标: {goal}\n\n"
+                    "🐍 Python 学习路线（零基础到实战）:\n"
+                    "阶段1: 基础语法（2周）\n"
+                    "  • 变量、数据类型、流程控制、函数、模块\n"
+                    "  • 练习：LeetCode 简单题 + 小脚本\n"
+                    "阶段2: 面向对象与异常（1周）\n"
+                    "  • 类/对象、继承、装饰器、异常处理\n"
+                    "  • 练习：实现一个小型命令行工具\n"
+                    "阶段3: 生态工具（1周）\n"
+                    "  • pip、虚拟环境、pytest、git 基础\n"
+                    "  • 练习：给项目写单元测试并提交到 Git\n"
+                    "阶段4: 实战项目（2-4周）\n"
+                    "  • 选方向：Web（FastAPI/Django）、数据分析（pandas）、自动化、AI 应用\n"
+                    "  • 练习：完成一个完整项目并部署/运行\n"
+                    "阶段5: 进阶与社区（持续）\n"
+                    "  • 阅读官方文档、源码、参与开源\n"
+                    "  • 建立个人知识库，定期复盘\n"
+                    "每日建议：30分钟理论学习 + 30分钟动手代码 + 10分钟复盘。\n"
+                )
+            return (
+                f"目标: {goal}\n\n"
+                "计划草案:\n"
+                "1. 理解需求 — 明确目标、约束和成功标准\n"
+                "2. 信息收集 — 检索相关知识和上下文\n"
+                "3. 方案设计 — 列出可行方案并评估\n"
+                "4. 执行实施 — 分步骤实现并验证\n"
+                "5. 回顾优化 — 收集反馈并迭代改进\n"
+            )
+
+        def tool_explain_code(path: str) -> str:
+            """解释代码文件的作用和关键逻辑。"""
+            try:
+                content = tool_read_file(path, limit=80)
+                lines = content.splitlines()
+                imports = [l.strip() for l in lines if l.strip().startswith(("import ", "from "))]
+                funcs = [l.strip() for l in lines if l.strip().startswith(("def ", "class "))]
+                docstrings = []
+                for i, l in enumerate(lines):
+                    if '"""' in l or "'''" in l:
+                        docstrings.append(l.strip()[:120])
+                        if len(docstrings) >= 3:
+                            break
+                summary = [
+                    f"文件: {path}",
+                    f"关键导入: {', '.join(imports[:8]) or '无'}",
+                    f"主要定义: {', '.join(funcs[:10]) or '无'}",
+                    "",
+                    "代码职责推断:",
+                ]
+                if funcs:
+                    summary.append(f"  该文件定义了 {len(funcs)} 个函数/类，主要负责 {funcs[0].split('(')[0].replace('def ','').replace('class ','')} 相关逻辑。")
+                if imports:
+                    libs = [i.split()[1].split('.')[0] for i in imports[:5]]
+                    summary.append(f"  依赖的关键库：{', '.join(set(libs))}。")
+                if docstrings:
+                    summary.append("  文档注释要点：")
+                    for d in docstrings[:3]:
+                        summary.append(f"    {d}")
+                return "\n".join(summary)
+            except Exception as e:
+                return f"[解释失败] {e}"
+
+        def tool_compare_files(path_a: str, path_b: str) -> str:
+            """比较两个文件的内容差异。"""
+            try:
+                a = tool_read_file(path_a, limit=200)
+                b = tool_read_file(path_b, limit=200)
+                import difflib
+                diff = list(difflib.unified_diff(
+                    a.splitlines(), b.splitlines(),
+                    fromfile=path_a, tofile=path_b, lineterm=""
+                ))[:80]
+                if not diff:
+                    return f"{path_a} 与 {path_b} 内容相同（前200行范围内）。"
+                return "\n".join(diff)
+            except Exception as e:
+                return f"[比较失败] {e}"
+
+        def tool_run_python(code: str) -> str:
+            """在受限子进程中运行一段 Python 代码。"""
+            import subprocess as _sp, sys as _sys, tempfile as _tf
+            try:
+                with _tf.NamedTemporaryFile("w", suffix=".py", delete=False, encoding="utf-8") as f:
+                    f.write(code)
+                    tmp = f.name
+                r = _sp.run(
+                    [_sys.executable, tmp],
+                    capture_output=True, text=True, timeout=10,
+                    encoding="utf-8", errors="replace"
+                )
+                out = r.stdout[-1500:] if len(r.stdout) > 1500 else r.stdout
+                err = r.stderr[-500:] if len(r.stderr) > 500 else r.stderr
+                return out + (f"\n[stderr]\n{err}" if err else "")
+            except _sp.TimeoutExpired:
+                return "[运行超时]"
+            except Exception as e:
+                return f"[运行失败] {e}"
+            finally:
+                try:
+                    Path(tmp).unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+        def tool_write_file(path: str, content: str) -> str:
+            """将内容写入文件（仅允许写入项目目录）。"""
+            try:
+                p = _resolve_path(path)
+                # 安全限制：只能写入 LAAP 根目录或当前工作目录下
+                allowed_roots = [Path(__file__).resolve().parent.parent, Path.cwd().resolve()]
+                if not any(str(p.resolve()).startswith(str(r)) for r in allowed_roots):
+                    return f"[拒绝写入] 路径 {path} 不在允许的项目目录内"
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(content, encoding="utf-8")
+                return f"[已写入] {p.resolve()} ({len(content)} 字符)"
+            except Exception as e:
+                return f"[写入失败] {e}"
+
+        def tool_count_lines(path: str = ".") -> str:
+            """统计目录下各类文件行数。"""
+            try:
+                p = _resolve_path(path)
+                if not p.exists():
+                    return f"[路径不存在] {path}"
+                counts = {}
+                total = 0
+                for f in p.rglob("*"):
+                    if f.is_file() and f.suffix in (".py", ".js", ".ts", ".md", ".txt", ".json", ".yaml", ".yml", ".rs", ".go"):
+                        try:
+                            n = len(f.read_text(encoding="utf-8", errors="ignore").splitlines())
+                            counts[f.suffix] = counts.get(f.suffix, 0) + n
+                            total += n
+                        except Exception:
+                            pass
+                if not counts:
+                    return f"{p.resolve()} 下未找到可统计代码文件。"
+                lines = [f"代码行数统计: {p.resolve()}", f"总计: {total} 行", ""]
+                for ext, n in sorted(counts.items(), key=lambda x: -x[1]):
+                    lines.append(f"  {ext}: {n} 行")
+                return "\n".join(lines)
+            except Exception as e:
+                return f"[统计失败] {e}"
+
+        def tool_list_memories(limit: int = 10) -> str:
+            """列出最近的语义记忆。"""
+            try:
+                import laap_semantic_memory as sem
+                mems = sem.get_memory().list_all(limit=limit)
+                if not mems:
+                    return "[暂无记忆]"
+                lines = [f"最近 {len(mems)} 条记忆:"]
+                for m in mems:
+                    text = m.get("text", "")[:80]
+                    lines.append(f"  • {m.get('timestamp','')} | {text}")
+                return "\n".join(lines)
+            except Exception as e:
+                return f"[列出记忆失败] {e}"
 
         for name, fn, desc in [
             ("terminal", tool_terminal, "执行shell命令"),
@@ -198,6 +489,18 @@ logger.info(r["output"][:2000])
             ("read_qre", tool_read_qre_state, "读QRE状态"),
             ("read_psi", tool_read_state, "读PSI状态"),
             ("generate_paper", tool_generate_paper, "生成论文"),
+            ("bootstrap_laap", tool_bootstrap_laap, "全面接入LAAP觉醒仪式"),
+            ("remember_fact", tool_remember_fact, "记住事实到语义记忆"),
+            ("recall_fact", tool_recall_fact, "从语义记忆召回事实"),
+            ("analyze_project", tool_analyze_project, "分析项目结构"),
+            ("summarize_file", tool_summarize_file, "摘要文件内容"),
+            ("generate_plan", tool_generate_plan, "生成任务计划"),
+            ("explain_code", tool_explain_code, "解释代码文件"),
+            ("compare_files", tool_compare_files, "比较两个文件"),
+            ("run_python", tool_run_python, "运行Python代码"),
+            ("write_file", tool_write_file, "写入文件"),
+            ("count_lines", tool_count_lines, "统计代码行数"),
+            ("list_memories", tool_list_memories, "列出语义记忆"),
         ]:
             self.tools.register(name, fn, desc)
 
@@ -205,8 +508,19 @@ logger.info(r["output"][:2000])
         """注册内置规则。"""
         self.rules = [
             Rule(
+                name="bootstrap_laap_rule",
+                patterns=["接入laap", "全面接入", "唤醒aris", "唤醒 aris", "bootstrap laap", "awaken aris"],
+                intent="bootstrap_laap",
+                description="全面接入LAAP，触发Aris觉醒仪式",
+                steps=[
+                    RuleStep(tool="bootstrap_laap", params={"user_name": "{user_name}"}, output_key="ceremony"),
+                ],
+                output_template="{ceremony}",
+                min_confidence=0.05,
+            ),
+            Rule(
                 name="check_status",
-                patterns=["状态", "情况", "怎么样", "你在干嘛", "在做什么", "status", "health", "心跳"],
+                patterns=["状态", "情况", "你在干嘛", "在做什么", "你现在如何", "status", "health", "心跳", "psi状态", "qre状态"],
                 intent="query_status",
                 description="查询Aris当前认知状态",
                 steps=[
@@ -267,6 +581,116 @@ logger.info(r["output"][:2000])
                 output_template="{output}",
             ),
             Rule(
+                name="remember_fact_rule",
+                patterns=["记住", "记下来", "别忘了", "记住我说", "记得我", "save memory"],
+                intent="remember_fact",
+                description="把事实保存到语义记忆",
+                steps=[
+                    RuleStep(tool="remember_fact", params={"fact": "{fact}"}, output_key="result"),
+                ],
+                output_template="{result}",
+            ),
+            Rule(
+                name="recall_fact_rule",
+                patterns=["回忆", "记得", "想起", "我之前说过", "我以前说", "recall memory"],
+                intent="recall_fact",
+                description="从语义记忆召回相关事实",
+                steps=[
+                    RuleStep(tool="recall_fact", params={"query": "{query}"}, output_key="result"),
+                ],
+                output_template="{result}",
+            ),
+            Rule(
+                name="analyze_project_rule",
+                patterns=["分析项目", "项目结构", "代码统计", "项目概况", "analyze project", "project structure"],
+                intent="analyze_project",
+                description="分析项目结构和代码量",
+                steps=[
+                    RuleStep(tool="analyze_project", params={"path": "{path}"}, output_key="result"),
+                ],
+                output_template="{result}",
+            ),
+            Rule(
+                name="summarize_file_rule",
+                patterns=["总结文件", "摘要文件", "文件总结", "summarize file", "summarize", "文件概况"],
+                intent="summarize_file",
+                description="读取并摘要文件内容",
+                steps=[
+                    RuleStep(tool="summarize_file", params={"path": "{path}"}, output_key="result"),
+                ],
+                output_template="{result}",
+            ),
+            Rule(
+                name="generate_plan_rule",
+                patterns=["生成计划", "制定计划", "帮我规划", "计划一下", "generate plan", "make a plan"],
+                intent="generate_plan",
+                description="为目标生成结构化计划",
+                steps=[
+                    RuleStep(tool="generate_plan", params={"goal": "{goal}"}, output_key="result"),
+                ],
+                output_template="{result}",
+            ),
+            Rule(
+                name="explain_code_rule",
+                patterns=["解释代码", "解释这个文件", "解释一下", "这段代码做什么", "explain code", "what does this code do"],
+                intent="explain_code",
+                description="解释代码文件的作用",
+                steps=[
+                    RuleStep(tool="explain_code", params={"path": "{path}"}, output_key="result"),
+                ],
+                output_template="{result}",
+            ),
+            Rule(
+                name="compare_files_rule",
+                patterns=["比较文件", "对比文件", "差异", "diff", "compare files", "difference between"],
+                intent="compare_files",
+                description="比较两个文件的差异",
+                steps=[
+                    RuleStep(tool="compare_files", params={"path_a": "{path_a}", "path_b": "{path_b}"}, output_key="result"),
+                ],
+                output_template="{result}",
+            ),
+            Rule(
+                name="run_python_rule",
+                patterns=["运行python", "执行python", "跑python", "run python", "execute python", "python:"],
+                intent="run_python",
+                description="执行一段 Python 代码",
+                steps=[
+                    RuleStep(tool="run_python", params={"code": "{code}"}, output_key="result"),
+                ],
+                output_template="执行结果:\n{result}",
+            ),
+            Rule(
+                name="write_file_rule",
+                patterns=["写入文件", "写文件", "创建文件", "保存到", "write file", "save to file"],
+                intent="write_file",
+                description="将内容写入指定文件",
+                steps=[
+                    RuleStep(tool="write_file", params={"path": "{path}", "content": "{content}"}, output_key="result"),
+                ],
+                output_template="{result}",
+            ),
+            Rule(
+                name="count_lines_rule",
+                patterns=["统计行数", "代码行数", "多少行", "count lines", "line count"],
+                intent="count_lines",
+                description="统计项目代码行数",
+                steps=[
+                    RuleStep(tool="count_lines", params={"path": "{path}"}, output_key="result"),
+                ],
+                output_template="{result}",
+            ),
+            Rule(
+                name="list_memories_rule",
+                patterns=["列出记忆", "我的记忆", "最近记忆", "list memories", "show memories"],
+                intent="list_memories",
+                description="列出最近的语义记忆",
+                steps=[
+                    RuleStep(tool="list_memories", params={"limit": "{limit}"}, output_key="result"),
+                ],
+                output_template="{result}",
+            ),
+            Rule(
                 name="ocr_document",
                 patterns=["ocr", "OCR", "识别", "扫描", "提取文字", "图片文字", "read image", "read pdf"],
                 intent="ocr",
@@ -318,6 +742,64 @@ logger.info(r["output"][:2000])
                 intent["params"]["query"] = text[idx:].strip()[:50]
                 break
         
+        # 提取要记住的事实
+        for prefix in ["记住", "记下来", "别忘了", "记住我说"]:
+            if prefix in text:
+                idx = text.index(prefix) + len(prefix)
+                intent["params"]["fact"] = text[idx:].strip()[:500]
+                break
+        
+        # 提取计划目标
+        for prefix in ["生成计划", "制定计划", "帮我规划", "计划一下"]:
+            if prefix in text:
+                idx = text.index(prefix) + len(prefix)
+                intent["params"]["goal"] = text[idx:].strip()[:200]
+                break
+
+        # 提取要解释的代码文件
+        for prefix in ["解释代码", "解释这个文件", "解释一下", "这段代码做什么", "explain code"]:
+            if prefix in text:
+                # path 已由上方通用正则提取，这里无需覆盖
+                break
+
+        # 提取对比的两个文件路径
+        path_matches = re.findall(r'[DCETdce]:[\\/][a-zA-Z0-9_\\/\.\-]+|[a-zA-Z0-9_\-]+\.(py|rs|md|txt|json|yaml|toml|bat|sh)|[a-zA-Z0-9_\-/]+\.[a-zA-Z0-9]+', text)
+        if len(path_matches) >= 2:
+            intent["params"]["path_a"] = path_matches[0]
+            intent["params"]["path_b"] = path_matches[1]
+
+        # 提取 Python 代码
+        for prefix in ["运行python", "执行python", "跑python", "run python", "execute python", "python:"]:
+            if prefix in text:
+                idx = text.index(prefix) + len(prefix)
+                intent["params"]["code"] = text[idx:].strip()[:2000]
+                break
+
+        # 提取写入文件的 path/content（格式：写文件 <path> <content>）
+        for prefix in ["写入文件", "写文件", "创建文件", "保存到", "write file", "save to file"]:
+            if prefix in text:
+                idx = text.index(prefix) + len(prefix)
+                rest = text[idx:].strip()
+                parts = rest.split(None, 1)
+                if len(parts) >= 1:
+                    intent["params"]["path"] = parts[0]
+                if len(parts) >= 2:
+                    intent["params"]["content"] = parts[1]
+                break
+
+        # 列出记忆数量限制
+        intent["params"]["limit"] = 10
+        for prefix in ["列出记忆", "我的记忆", "最近记忆", "list memories", "show memories"]:
+            if prefix in text:
+                # 简单支持“列出10条记忆”这类表达
+                m = re.search(r'(\d+)\s*条', text)
+                if m:
+                    intent["params"]["limit"] = int(m.group(1))
+                break
+
+        # 默认用户名
+        intent["params"]["user_name"] = "朋友"
+
         return intent
 
     # ─── 规则匹配 ────────────────────────────────────────

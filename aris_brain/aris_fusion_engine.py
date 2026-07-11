@@ -22,7 +22,10 @@ import sys, os, json, time, logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-sys.path.insert(0, os.path.dirname(__file__))
+from laap_brain.config import LAAP_ROOT
+_root = str(LAAP_ROOT)
+if _root not in sys.path:
+    sys.path.insert(0, _root)
 logger = logging.getLogger("aris.fusion")
 
 # ─── 1. 中文NLP管线 ─────────────────────────────────────

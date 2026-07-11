@@ -35,8 +35,7 @@ from collections import deque
 from dataclasses import dataclass, field, asdict
 from enum import Enum, auto
 
-from config import BRAIN_DIR as BRAIN, setup_paths
-setup_paths()
+from laap_brain.config import BRAIN_DIR as BRAIN
 
 logger = logging.getLogger("aris.emotion")
 

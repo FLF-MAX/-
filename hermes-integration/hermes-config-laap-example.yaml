@@ -1,0 +1,39 @@
+# Hermes config.yaml snippet for LAAP integration
+# Copy the mcp_servers block into your real Hermes config:
+#   %USERPROFILE%\.hermes\config.yaml        (Windows)
+#   ~/.hermes/config.yaml                    (Linux/macOS)
+# or profile-specific:
+#   %USERPROFILE%\.hermes\profiles\<name>\config.yaml
+#
+# IMPORTANT: Replace <your-username>, <laap-root> and <hermes-home>
+# with your actual paths, or use environment variables.
+
+mcp_servers:
+  laap_brain:
+    # Stdio mode (recommended - no extra port needed)
+    # TODO: Replace the placeholders below with your actual paths.
+    # On Windows: command: "C:\Users\<you>\AppData\Local\hermes\hermes-agent\venv\Scripts\python.exe"
+    # On Unix:    command: "/home/<you>/.hermes/hermes-agent/.venv/bin/python"
+    command: "<HERMES_VENV_PYTHON>"
+    args:
+      - "<LAAP_ROOT>\\mcp_server\\laap_mcp_server.py"
+    env:
+      LAAP_API_BASE: "http://localhost:11546"
+    timeout: 30
+    connect_timeout: 10
+    keepalive_interval: 60
+
+  # Alternative: SSE mode (uncomment and run MCP server separately)
+  # laap_brain_sse:
+  #   url: "http://localhost:11547/sse"
+  #   transport: sse
+  #   timeout: 30
+
+# Optional: ensure the laap-bridge skill is always loaded
+skills:
+  preload:
+    - laap-bridge
+
+# Optional: source-level integration env var
+# Set this in your shell or in Hermes's .env file:
+# LAAP_API_BASE=http://localhost:11546

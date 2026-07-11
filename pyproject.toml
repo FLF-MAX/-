@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "laap"
+version = "1.0.0"
+description = "LAAP — Lifeform Architecture for Autonomous Psyche. A cognitive engine that treats LLMs as a voice cortex, not a brain."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+authors = [{ name = "Lorry Jovens" }]
+license = "MIT"
+dependencies = [
+    # Hermes Agent — the "body" infrastructure (tools, LLM providers, sessions)
+    "hermes-agent",
+    # LAAP core — zero external LLM deps; pure cognitive architecture
+    "aiohttp>=3.9.0,<4",
+    "pyyaml>=6.0,<7",
+    "python-dotenv>=1.0,<2",
+    "psutil>=5.9,<7",
+    "numpy>=1.24,<3",
+]
+
+[project.optional-dependencies]
+psi-core = []  # Rust PSI core (pip install from local path)
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+laap-brain = "laap_brain.api:main"
+laap-aris = "aris_brain.aris_start_all:main"
+
+[tool.setuptools.packages.find]
+include = ["laap_brain", "laap_brain.*", "aris_brain", "aris_brain.*", "mcp_server", "mcp_server.*"]
+
+[tool.setuptools.package-data]
+aris_brain = ["state/**/*", "corpus/**/*", "memory/**/*"]

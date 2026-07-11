@@ -12,8 +12,10 @@ import sys, os, json, time, logging, urllib.request, urllib.error
 from pathlib import Path
 from typing import Optional, List, Dict
 
-BRAIN = Path(os.environ.get("ARIS_BRAIN_ROOT", "D:/LAAP/aris_brain"))
-sys.path.insert(0, str(BRAIN))
+from laap_brain.config import BRAIN_DIR as BRAIN, LAAP_ROOT
+_root = str(LAAP_ROOT)
+if _root not in sys.path:
+    sys.path.insert(0, _root)
 
 logger = logging.getLogger("aris.messenger")
 

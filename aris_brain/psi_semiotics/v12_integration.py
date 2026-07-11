@@ -16,8 +16,14 @@ from typing import Dict, List, Optional, Any
 
 logger = logging.getLogger("psi_integration")
 
-BRAIN_DIR = Path("D:/LAAP/aris_brain")
-SEMIOTICS_DIR = BRAIN_DIR / "psi_semiotics"
+# 从统一配置导入路径（支持环境变量覆盖）
+try:
+    from laap_brain.config import BRAIN_DIR
+    SEMIOTICS_DIR = BRAIN_DIR / "psi_semiotics"
+except ImportError:
+    BRAIN_DIR = Path(os.environ.get("ARIS_BRAIN_ROOT",
+        str(Path(__file__).resolve().parent.parent)))
+    SEMIOTICS_DIR = BRAIN_DIR / "psi_semiotics"
 
 # 确保导入路径
 for p in [str(BRAIN_DIR), str(SEMIOTICS_DIR)]:

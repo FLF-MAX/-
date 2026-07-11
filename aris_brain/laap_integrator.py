@@ -41,8 +41,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
 
 # ── 统一配置 ─────────────────────────────────────────────────
-from config import BRAIN_DIR as BRAIN, LAAP_ROOT, STATE_DIR, DB_LAAP_INTEGRATOR, setup_paths
-setup_paths()
+from laap_brain.config import BRAIN_DIR as BRAIN, LAAP_ROOT, STATE_DIR, DB_LAAP_INTEGRATOR
 
 LOG = BRAIN / "state" / "laap_integrator.log"
 BRAIN.mkdir(parents=True, exist_ok=True)
@@ -96,7 +95,10 @@ class LaapIntegrator:
             self._state = {"startups": 0, "last_start": 0}
 
     def _save_state(self):
-        self._state_path.write_text(json.dumps(self._state, ensure_ascii=False, indent=2))
+        try:
+            self._state_path.write_text(json.dumps(self._state, ensure_ascii=False, indent=2))
+        except PermissionError:
+            logger.debug(f"State save permission denied, continuing in memory-only mode")
 
     # ════════════════════════════════════════════════════════════
     # 跨会话认知状态保存/恢复

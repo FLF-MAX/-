@@ -32,11 +32,17 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 # ── 路径 ──────────────────────────────────────────────────────────────────────
-BRAIN_DIR = Path("D:/LAAP/aris_brain")
-HERMES_DIR = Path("D:/hermes-agent-main (1)/hermes-agent-main")
+# 从当前文件位置自动检测项目根目录，可通过环境变量覆盖
+BRAIN_DIR = Path(os.environ.get("ARIS_BRAIN_ROOT",
+    str(Path(__file__).resolve().parent)))
+LAAP_ROOT = Path(os.environ.get("LAAP_ROOT",
+    str(BRAIN_DIR.parent)))
+HERMES_DIR = Path(os.environ.get("HERMES_ROOT",
+    str(Path.home() / ".hermes" / "hermes-agent")))
 VENV_PYTHON = HERMES_DIR / ".venv" / "Scripts" / "python.exe"
 HERMES_CLI = HERMES_DIR / ".venv" / "Scripts" / "hermes.exe"
-ARIS_DIR = Path(os.environ.get("USERPROFILE", "C:/Users/user")) / ".aris"
+ARIS_DIR = Path(os.environ.get("ARIS_LOG_DIR",
+    str(Path(os.environ.get("USERPROFILE", str(Path.home()))) / ".aris")))
 LOG_FILE = ARIS_DIR / "watchdog.log"
 ARIS_DIR.mkdir(parents=True, exist_ok=True)
 

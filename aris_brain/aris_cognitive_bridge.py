@@ -25,8 +25,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 # ── 路径 ────────────────────────────────────────────────────
-from config import BRAIN_DIR as BRAIN_ROOT, LAAP_ROOT, setup_paths
-setup_paths()
+from laap_brain.config import BRAIN_DIR as BRAIN_ROOT, LAAP_ROOT
 
 from memory_bridge import get_memory_context, recall_related, store_important
 from memory_store import MemoryStore, MemoryFragment

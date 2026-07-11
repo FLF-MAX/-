@@ -52,7 +52,15 @@ except ImportError:
 
 logger = logging.getLogger("aris.agi_subscriber")
 
-OUTPUT_FILE = "D:/LAAP/aris_brain/state/agi_output.json"
+# 从统一配置导入状态目录（支持环境变量覆盖）
+try:
+    from laap_brain.config import STATE_DIR
+    OUTPUT_FILE = str(STATE_DIR / "agi_output.json")
+except ImportError:
+    _brain_dir = Path(os.environ.get("ARIS_BRAIN_ROOT",
+        str(Path(__file__).resolve().parent)))
+    OUTPUT_FILE = str(Path(os.environ.get("LAAP_STATE_DIR",
+        str(_brain_dir / "state"))) / "agi_output.json")
 
 
 class AGISubscriber:

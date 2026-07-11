@@ -18,10 +18,11 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from dataclasses import dataclass, field
 
-BRAIN = Path("D:/LAAP/aris_brain")
-STATE = BRAIN / "state"
-sys.path.insert(0, str(BRAIN))
-sys.path.insert(0, str(BRAIN.parent))
+from laap_brain.config import BRAIN_DIR as BRAIN, STATE_DIR, LAAP_ROOT
+STATE = STATE_DIR
+_root = str(LAAP_ROOT)
+if _root not in sys.path:
+    sys.path.insert(0, _root)
 
 STATE.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [AGI] %(message)s",

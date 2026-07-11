@@ -20,7 +20,17 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from difflib import SequenceMatcher
 
-STORE_PATH = "D:/LAAP/aris_brain/state/episodic_store.json"
+# 从统一配置导入状态目录（支持环境变量覆盖）
+try:
+    from laap_brain.config import STATE_DIR
+    _DEFAULT_STORE = str(STATE_DIR / "episodic_store.json")
+except ImportError:
+    _brain_dir = Path(os.environ.get("ARIS_BRAIN_ROOT",
+        str(Path(__file__).resolve().parent)))
+    _DEFAULT_STORE = str(Path(os.environ.get("LAAP_STATE_DIR",
+        str(_brain_dir / "state"))) / "episodic_store.json")
+
+STORE_PATH = _DEFAULT_STORE
 MAX_EPISODES = 5000  # 最多存5000条，防止无限增长
 
 
