@@ -1,3 +1,4 @@
+<img width="2229" height="1152" alt="39c92f6e4a59a974e867644543317d84" src="https://github.com/user-attachments/assets/b143450b-a3f7-4e31-bc6b-7200d0c7ef9a" />
 <p align="center">
   <img src="assets/laap-logo.svg" width="220" alt="LAAP Logo"/>
 </p>
