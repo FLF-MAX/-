@@ -1,3 +1,6 @@
+官网链接https://laap-agi.netlify.app
+
+img width="2229" height="1152" alt="d3a60cc3cd004d83d74ac2e09ae2abab" src="https://github.com/user-attachments/assets/8f471dd9-66b4-4bd1-a148-e1dd56d65c29" />
 <img width="2229" height="1152" alt="39c92f6e4a59a974e867644543317d84" src="https://github.com/user-attachments/assets/b143450b-a3f7-4e31-bc6b-7200d0c7ef9a" />
 <p align="center">
   <img src="assets/laap-logo.svg" width="220" alt="LAAP Logo"/>
