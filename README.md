@@ -125,7 +125,7 @@ LAAP 用纯粹的认知架构解决它们：
 | 类比映射 | AnalogicalEngine | — |
 | 世界模拟 | UnifiedWorldModel | — |
 
-**LLM 是伙伴，不是生命维持系统。**
+**LLM 是伙伴，更是生命维持系统。**
 
 ---
 
