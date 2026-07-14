@@ -30,7 +30,12 @@ laap-brain = "laap_brain.api:main"
 laap-aris = "aris_brain.aris_start_all:main"
 
 [tool.setuptools.packages.find]
-include = ["laap_brain", "laap_brain.*", "aris_brain", "aris_brain.*", "mcp_server", "mcp_server.*"]
+include = [
+    "laap", "laap.*",
+    "laap_brain", "laap_brain.*",
+    "aris_brain", "aris_brain.*",
+    "mcp_server", "mcp_server.*",
+]
 
 [tool.setuptools.package-data]
 aris_brain = ["state/**/*", "corpus/**/*", "memory/**/*"]

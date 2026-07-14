@@ -390,15 +390,87 @@ laap-AGI/
 │   ├── hermes-config-laap-example.yaml
 │   ├── start_laap_hermes.bat
 │   └── update_hermes_config.py
-├── laap/agi/                   # AGI 引擎
-│   ├── causal.py
-│   ├── analogical.py
-│   └── world_model.py
+├── laap/                       # LAAP 协议包（从旧版 LAAP 迁移）
+│   ├── __init__.py
+│   ├── config/paths.py         # 统一路径解析（无硬编码绝对路径）
+│   ├── rust_bridge.py          # Rust 核心 stub（无原生扩展时优雅降级）
+│   └── agi/                    # AGI 引擎
+│       ├── __init__.py
+│       ├── core.py             # AGIAgent 统一入口
+│       ├── world_model.py      # 统一世界模型
+│       ├── causal.py           # 统一因果引擎
+│       ├── analogical.py       # 结构映射类比推理
+│       ├── self_model.py       # 涌现自我模型
+│       ├── memory_system.py    # 情景/语义/程序记忆
+│       ├── conscious.py        # 意识流
+│       ├── autonomy.py         # 目标驱动的自主引擎
+│       ├── safety.py           # ASI 安全引擎
+│       ├── perception.py       # 统一感知引擎
+│       ├── meta_cognitive.py   # 元认知监控
+│       ├── affective_engine.py # 情感动力学
+│       ├── gw_workspace.py     # 全局工作空间
+│       ├── unified_memory.py   # 统一记忆层
+│       ├── evolution_engine.py # 代码/能力进化
+│       ├── rsi_engine.py       # 递归自我改进
+│       ├── multi_agent.py      # 多 Agent 协作
+│       ├── cognitive_bus.py    # 认知事件总线
+│       └── world_models/       # 世界模型后端（genesis/hunyuan/openworldlib）
+├── examples/                   # 示例脚本
+│   └── agi_quickstart.py
+├── tests/                      # 基础测试
+│   └── test_laap_agi.py
 ├── references/                 # 架构文档
 ├── .env.example
 ├── .gitignore
 ├── LICENSE                     # Apache 2.0
 └── README.md
+```
+
+---
+
+## 🚀 AGI 引擎快速开始
+
+`laap/agi/` 现已实际包含旧版 LAAP 的完整 AGI 认知模块，不依赖 Hermes 或 Rust 核心即可导入和运行：
+
+```bash
+pip install numpy
+python examples/agi_quickstart.py
+```
+
+最小代码示例：
+
+```python
+from laap.agi.core import create_agi_agent
+from laap.agi.world_model import EntityType
+from laap.agi.causal import CausalRule
+
+agent = create_agi_agent("Ao", state_dir="./agi_state")
+
+# 世界模型
+entity = agent.world.add_entity(
+    name="Lorry", entity_type=EntityType.USER,
+    properties={"trust": 0.8}
+)
+
+# 因果规则
+agent.causal.learn_rule(CausalRule(
+    name="greet_rule", action="greet",
+    conditions=[], effects=[],
+    probability=1.0, confidence=0.9,
+))
+print(agent.causal.predict("greet", mode="rule"))
+
+# 情景记忆
+agent.memory_system.encode_episode(
+    content="First interaction.", associations=["demo"]
+)
+```
+
+运行测试：
+
+```bash
+pip install pytest
+python -m pytest tests/test_laap_agi.py -v
 ```
 
 ---
