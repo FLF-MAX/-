@@ -9,7 +9,7 @@ description = "LAAP — Lifeform Architecture for Autonomous Psyche. A cognitive
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 authors = [{ name = "Lorry Jovens" }]
-license = "MIT"
+license = "Apache-2.0"
 dependencies = [
     # Hermes Agent — the "body" infrastructure (tools, LLM providers, sessions)
     "hermes-agent",
@@ -34,6 +34,7 @@ include = [
     "laap", "laap.*",
     "laap_brain", "laap_brain.*",
     "aris_brain", "aris_brain.*",
+    "psi_core", "psi_core.*",
     "mcp_server", "mcp_server.*",
 ]
 

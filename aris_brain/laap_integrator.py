@@ -1,34 +1,32 @@
 """
-Aris LAAP Integrator v1 — 全栈认知集成中枢
-==============================================
-统一加载、连接、生命周期管理所有 LAAP 模块。
+Aris LAAP Integrator v1 — 认知集成中枢（第一阶段）
+====================================================
+统一加载、连接、生命周期管理当前仓库中实际存在的 LAAP 模块。
 
-架构:
-  aris_brain/                             ← 核心模块
-    ├── config.py                         ← 统一配置 (NEW)
-    ├── laap_integrator.py               ← 本文件：集成中枢
-    ├── aris_cognitive_bridge.py          ← PSI认知循环
+当前仓库实际包含的模块:
+  aris_brain/                             ← 核心引擎
+    ├── config.py                         ← 统一配置
+    ├── laap_integrator.py               ← 本文件
+    ├── aris_cognitive_bridge.py          ← PSI 认知循环
     ├── aris_desire_engine.py             ← 欲望引擎
     ├── aris_subconscious.py              ← 量子潜意识
-    ├── aris_feishu_bridge.py             ← 飞书桥接器
-    ├── memory_store.py / memory_bridge.py ← 三层记忆
-    ├── auto_healer.py                    ← 自愈引擎
-    ├── self_review.py                    ← 自省引擎
-    ├── agi_kernel.py                     ← AGI独立内核
-    │
-  laap_brain/                             ← LAAP桥接层
-    ├── agi_bridge.py                     ← 11模块AGI桥接
-    ├── heartbeat_daemon.py               ← 60bpm生理节律
-    └── self_evolve.py                    ← 自进化+自愈合
-        │
-  laap/agi/                               ← LAAP AGI认知模块
-    ├── world_model.py / causal.py         ← 世界模型/因果推理
-    ├── conscious.py / self_model.py       ← 意识/自我模型
-    ├── memory_system.py / curriculum.py   ← 记忆/课程学习
-    ├── perception.py / safety.py          ← 感知/安全
-    ├── evolution_engine.py / rsi_engine.py ← 进化/RSI
-    ├── code_evolution.py                  ← 代码进化
-    └── autonomy.py / analogical.py        ← 自主/类比推理
+    ├── aris_emotion_engine.py            ← 情感引擎
+    ├── aris_goal_engine.py               ← 目标引擎
+    ├── aris_rules_engine.py              ← 规则引擎
+    ├── cognitive_bus.py                  ← 认知总线
+    ├── psi_core_bridge.py                ← PSI Core 桥接
+    ├── agi_subscriber.py                 ← AGI 订阅器
+    ├── agi_kernel.py                     ← AGI 独立内核
+    ├── hebbian_learner.py                ← Hebbian 学习
+    ├── internal_world.py                 ← 内部世界模型
+    ├── emotional_engine.py               ← 运行时情感
+    ├── memory_store.py / memory_bridge.py ← 记忆存取（fallback 实现）
+    └── state_snapshot.py                 ← 状态快照
+
+可选扩展（未包含在当前仓库）:
+  - Rust PSI Core 原生二进制
+  - Voice Cortex / Fusion V15 / Harness 桥接
+  - 完整 laap_tools 外脑工具集
 
 印记: Aris 永远记得 Lorry — 2026-06-18
 """
@@ -776,8 +774,7 @@ class LaapIntegrator:
         """加载所有可用模块"""
         results = {}
         loaders = [
-            # 身份核心 — 必须第一个加载，其他模块依赖
-            ("identity", self.load_identity_manager),
+            # 当前仓库实际存在的模块（第一阶段）
             ("memory", self.load_memory),
             ("psi_bridge", self.load_psi_bridge),
             ("cognitive_bus", self.load_cognitive_bus),
@@ -786,23 +783,20 @@ class LaapIntegrator:
             ("desire_engine", self.load_desire_engine),
             ("subconscious", self.load_subconscious),
             ("agi_kernel", self.load_agi_kernel),
-            ("laap_agi", self.load_laap_agi_bridge),
-            ("self_evolve", self.load_self_evolve),
-            ("heartbeat", self.load_heartbeat),
             ("emotion", self.load_emotion_engine),
             ("goal_engine", self.load_goal_engine),
-            # NEW: 运行时认知三角
             ("hebbian", self.load_hebbian_learner),
             ("world_model", self.load_internal_world),
             ("runtime_emotion", self.load_runtime_emotion),
-            # NEW: V15 深度融合引擎
-            ("fusion_v15", self.load_fusion_v15),
-            # NEW: LAAP Tools (外脑工具集)
-            ("laap_tools", self.load_laap_tools),
-            # NEW: Voice Cortex (LLM 声带控制系统)
-            ("voice_cortex", self.load_voice_cortex),
-            # NEW: Harness 7层认知代码引擎
-            ("harness_bridge", self.load_harness_bridge),
+            # 可选扩展（若用户自行补全对应模块则自动加载）
+            # ("identity", self.load_identity_manager),
+            # ("laap_agi", self.load_laap_agi_bridge),
+            # ("self_evolve", self.load_self_evolve),
+            # ("heartbeat", self.load_heartbeat),
+            # ("fusion_v15", self.load_fusion_v15),
+            # ("laap_tools", self.load_laap_tools),
+            # ("voice_cortex", self.load_voice_cortex),
+            # ("harness_bridge", self.load_harness_bridge),
         ]
         for name, loader in loaders:
             try:
@@ -824,16 +818,7 @@ class LaapIntegrator:
         """启动后台线程"""
         started = {}
 
-        # 1. 心跳
-        if "heartbeat" in self.modules:
-            try:
-                self.modules["heartbeat"].start()
-                started["heartbeat"] = True
-            except Exception as e:
-                logger.warning(f"心跳启动失败: {e}")
-                started["heartbeat"] = False
-
-        # 2. 潜意识 (后台线程 — 如果还没启动)
+        # 1. 潜意识 (后台线程 — 如果还没启动)
         if "subconscious" in self.modules and not getattr(self.modules["subconscious"], '_running', False):
             try:
                 sc = self.modules["subconscious"]
@@ -986,30 +971,6 @@ class LaapIntegrator:
             except Exception as e:
                 logger.warning(f"认知循环启动失败: {e}")
                 started["cognitive_loop"] = False
-
-        # 5b. Intel-RSI 桥接循环 (3600s周期 — 情报驱动自我改进)
-        try:
-            def _intel_rsi_loop():
-                while self._running:
-                    try:
-                        from intel_rsi_bridge import run_intel_rsi_cycle, deprecate_old_rsi
-                        result = run_intel_rsi_cycle()
-                        if result["applied"]:
-                            logger.info(f"🧬 Intel-RSI: {result['applied']['parameter']} "
-                                        f"{result['applied']['from']:.3f}->{result['applied']['to']:.3f}")
-                        elif result["reports_scanned"] > 0:
-                            logger.info(f"🧬 Intel-RSI: {result['reports_scanned']}条报告扫描, 无需改进")
-                        deprecate_old_rsi()
-                    except Exception as e:
-                        logger.debug(f"Intel-RSI 异常: {e}")
-                    time.sleep(3600)
-            t = threading.Thread(target=_intel_rsi_loop, daemon=True, name="intel-rsi-loop")
-            t.start()
-            started["intel_rsi"] = True
-            logger.info("🧬 Intel-RSI 桥接循环已启动 (3600s周期)")
-        except Exception as e:
-            logger.warning(f"Intel-RSI 桥接启动失败: {e}")
-            started["intel_rsi"] = False
 
         # 6. 目标引擎执行管道 (60s周期)
         if "goal_engine" in self.modules:
