@@ -1,4 +1,4 @@
-from aris_rules_engine import get_engine
+from aris_brain.aris_rules_engine import get_engine
 
 e = get_engine()
 print('Tools:', e.tools.list())

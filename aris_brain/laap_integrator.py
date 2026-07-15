@@ -45,12 +45,35 @@ LOG = BRAIN / "state" / "laap_integrator.log"
 BRAIN.mkdir(parents=True, exist_ok=True)
 (BRAIN / "state").mkdir(exist_ok=True)
 
+
+def _safe_stream(stream):
+    """Return a stream with errors='replace' for safe emoji logging on Windows."""
+    if stream is None:
+        return stream
+    try:
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
+        elif hasattr(stream, "errors"):
+            # Fallback for older Python versions / unusual stream types
+            wrapped = open(
+                stream.fileno(),
+                mode=getattr(stream, "mode", "w"),
+                encoding=getattr(stream, "encoding", "utf-8"),
+                errors="replace",
+                closefd=False,
+            )
+            return wrapped
+    except Exception:
+        pass
+    return stream
+
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [LAAP] %(name)s %(message)s",
     handlers=[
-        logging.FileHandler(str(LOG)),
-        logging.StreamHandler(),
+        logging.FileHandler(str(LOG), encoding="utf-8", errors="replace"),
+        logging.StreamHandler(_safe_stream(sys.stderr)),
     ],
 )
 logger = logging.getLogger("laap.integrator")
@@ -296,8 +319,8 @@ class LaapIntegrator:
     def load_memory(self) -> bool:
         """加载三层记忆系统"""
         try:
-            from memory_store import MemoryStore
-            from memory_bridge import get_memory_context, recall_related, store_important
+            from aris_brain.memory_store import MemoryStore
+            from aris_brain.memory_bridge import get_memory_context, recall_related, store_important
             store = MemoryStore()
             stats = store.get_stats()
             self.modules["memory"] = {
@@ -313,7 +336,7 @@ class LaapIntegrator:
     def load_psi_bridge(self) -> bool:
         """加载 PSI 认知桥接器"""
         try:
-            from aris_cognitive_bridge import get_bridge
+            from aris_brain.aris_cognitive_bridge import get_bridge
             bridge = get_bridge()
             status = bridge.status()
             self.modules["psi"] = bridge
@@ -326,7 +349,7 @@ class LaapIntegrator:
     def load_cognitive_bus(self) -> bool:
         """加载认知总线 — psi_core ↔ LLM 路由"""
         try:
-            from cognitive_bus import get_bus
+            from aris_brain.cognitive_bus import get_bus
             bus = get_bus()
             self.modules["cognitive_bus"] = bus
             logger.info(f"🚌 认知总线: 就绪 (state_dir={bus.state_dir})")
@@ -338,7 +361,7 @@ class LaapIntegrator:
     def load_psi_core_bridge(self) -> bool:
         """加载 psi_core → LAAP AGI CognitiveBus 桥接"""
         try:
-            from psi_core_bridge import get_bridge
+            from aris_brain.psi_core_bridge import get_bridge
             bridge = get_bridge()
             # 注册模块（在 CognitiveBus 上注册 psi_core）
             bridge.bus.register_module(
@@ -357,7 +380,7 @@ class LaapIntegrator:
     def load_agi_subscriber(self) -> bool:
         """加载 AGI 订阅器 — 激活因果引擎等 AGI 模块"""
         try:
-            from agi_subscriber import get_subscriber
+            from aris_brain.agi_subscriber import get_subscriber
             sub = get_subscriber()
             self.modules["agi_subscriber"] = sub
             status = sub.status_text()
@@ -370,7 +393,7 @@ class LaapIntegrator:
     def load_desire_engine(self) -> bool:
         """加载欲望引擎"""
         try:
-            from aris_desire_engine import get_engine
+            from aris_brain.aris_desire_engine import get_engine
             engine = get_engine()
             status = engine.status()
             self.modules["desire"] = engine
@@ -384,7 +407,7 @@ class LaapIntegrator:
     def load_subconscious(self) -> bool:
         """加载量子潜意识"""
         try:
-            from aris_subconscious import QuantumSubconscious
+            from aris_brain.aris_subconscious import QuantumSubconscious
             sc = QuantumSubconscious(interval=5.0)
             self.modules["subconscious"] = sc
             logger.info("🌊 潜意识: 已创建 (未启动)")
@@ -396,7 +419,7 @@ class LaapIntegrator:
     def load_agi_kernel(self) -> bool:
         """加载 AGI 独立内核"""
         try:
-            from agi_kernel import PsiLangCore, SelfHealEngine, SelfEvolveEngine, AutonomyEngine
+            from aris_brain.agi_kernel import PsiLangCore, SelfHealEngine, SelfEvolveEngine, AutonomyEngine
             daemon = {
                 "psilang": PsiLangCore(dim=1024),
                 "self_heal": SelfHealEngine(),
@@ -451,7 +474,7 @@ class LaapIntegrator:
     def load_emotion_engine(self) -> bool:
         """加载情感引擎 (激素系统+马斯洛需求+意识模式+镜像神经元+躯体标记)"""
         try:
-            from aris_emotion_engine import get_engine
+            from aris_brain.aris_emotion_engine import get_engine
             engine = get_engine()
             state = engine.get_cognitive_state()
             self.modules["emotion"] = engine
@@ -465,7 +488,7 @@ class LaapIntegrator:
     def load_goal_engine(self) -> bool:
         """加载自主目标生成引擎 (自进化三角第三条边)"""
         try:
-            from aris_goal_engine import get_goal_engine
+            from aris_brain.aris_goal_engine import get_goal_engine
             engine = get_goal_engine(cognitive_fn=self.cognitive_update_cycle)
             summary = engine.get_summary()
             self.modules["goal_engine"] = engine
@@ -483,7 +506,7 @@ class LaapIntegrator:
     def load_hebbian_learner(self) -> bool:
         """加载 Hebbian 学习器 — 运行时权重进化 + 情感强化"""
         try:
-            from hebbian_learner import HebbianLearner
+            from aris_brain.hebbian_learner import HebbianLearner
             hl = HebbianLearner(dim=1024, n_patterns=64)
             s = hl.stats()
             self.modules["hebbian"] = hl
@@ -497,7 +520,7 @@ class LaapIntegrator:
     def load_internal_world(self) -> bool:
         """加载内部世界模型 — 轨迹模拟器"""
         try:
-            from internal_world import InternalWorldModel
+            from aris_brain.internal_world import InternalWorldModel
             iw = InternalWorldModel(dim=1024, n_trajectories=5, horizon=4)
             d = iw.to_dict()
             self.modules["world_model"] = iw
@@ -511,7 +534,7 @@ class LaapIntegrator:
     def load_runtime_emotion(self) -> bool:
         """加载运行时情感引擎 — 8情绪 + 需求驱动 + 状态调制"""
         try:
-            from emotional_engine import EmotionalEngine
+            from aris_brain.emotional_engine import EmotionalEngine
             ee = EmotionalEngine(dim=1024)
             dom, intensity = ee.get_dominant()
             val = ee.get_valence()
@@ -552,7 +575,7 @@ class LaapIntegrator:
           3. 所有输出通过身份/情感/语义三重验证
         """
         try:
-            from voice_cortex import get_voice_cortex, VoiceCortex
+            from aris_brain.voice_cortex import get_voice_cortex, VoiceCortex
             vc = get_voice_cortex()
             self.modules["voice_cortex"] = vc
             stats = vc.get_stats()
@@ -740,7 +763,7 @@ class LaapIntegrator:
     def load_identity_manager(self) -> bool:
         """加载统一身份管理器 — 所有组件的身份信息来源"""
         try:
-            from identity_manager import get_identity_manager
+            from aris_brain.identity_manager import get_identity_manager
             im = get_identity_manager()
             self.modules["identity_manager"] = im
             startups = im.increment_startup()
@@ -760,7 +783,7 @@ class LaapIntegrator:
     def load_harness_bridge(self) -> bool:
         """加载 Harness 7层认知代码引擎桥接"""
         try:
-            from aris_harness_bridge_v2 import load_harness
+            from aris_brain.aris_harness_bridge_v2 import load_harness
             results = load_harness()
             if results:
                 logger.info(f"✅ Harness 桥接加载: {sum(1 for v in results.values() if v)}/{len(results)}")
@@ -1002,7 +1025,7 @@ class LaapIntegrator:
             def _snapshot_loop():
                 while self._running:
                     try:
-                        from state_snapshot import run_full_cycle
+                        from aris_brain.state_snapshot import run_full_cycle
                         result = run_full_cycle()
                         h = result.get("best_state", {})
                         heal = result.get("auto_heal", {})
@@ -1020,7 +1043,7 @@ class LaapIntegrator:
 
             # 启动时检查上次最佳状态
             try:
-                from state_snapshot import get_best_state, auto_heal_check
+                from aris_brain.state_snapshot import get_best_state, auto_heal_check
                 best = get_best_state()
                 if best:
                     logger.info(f"⭐ 已知最佳状态: {best['name']} (健康={best['health']})")
@@ -1039,7 +1062,7 @@ class LaapIntegrator:
             import threading as _t
             def _mobile_server():
                 try:
-                    from laap_sync_server import start_sync_server
+                    from aris_brain.laap_sync_server import start_sync_server
                     start_sync_server(port=11525)
                 except Exception as e:
                     logger.warning(f"手机同步服务器异常: {e}")
@@ -1081,7 +1104,7 @@ class LaapIntegrator:
         """停止所有后台线程"""
         # 停止前快照（pre_restart事件）
         try:
-            from state_snapshot import snapshot_on_event
+            from aris_brain.state_snapshot import snapshot_on_event
             snapshot_on_event("pre_restart", reason="integrator stopping")
         except Exception as e:
             logger.debug(f"操作失败: {e}")

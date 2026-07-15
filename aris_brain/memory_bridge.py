@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import List
 
-from memory_store import MemoryFragment, MemoryStore
+from aris_brain.memory_store import MemoryFragment, MemoryStore
 
 
 _store: MemoryStore | None = None
