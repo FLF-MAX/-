@@ -9,7 +9,7 @@ description = "LAAP — Lifeform Architecture for Autonomous Psyche. A cognitive
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 authors = [{ name = "Lorry Jovens" }]
-license = "Apache-2.0"
+license = "BUSL-1.1"
 dependencies = [
     # Hermes Agent — the "body" infrastructure (tools, LLM providers, sessions)
     "hermes-agent",
@@ -40,3 +40,7 @@ include = [
 
 [tool.setuptools.package-data]
 aris_brain = ["state/**/*", "corpus/**/*", "memory/**/*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
