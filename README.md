@@ -1,3 +1,6 @@
+<img width="1279" height="1743" alt="3c4fa3291b64126706d36bf2d16c4c48" src="https://github.com/user-attachments/assets/9e47d377-325a-4e12-b901-89d644b05d6a" /感谢赞助博主一杯奶茶
+<img width="1672" height="2132" alt="f3a21a1182bc8496f45e2bf2b2cff6e1" src="https://github.com/user-attachments/assets/04234d6f-a8d4-466f-b4ec-9e78e41ce104" />
+记得配合Hermes等等agent使用，这是agent的上位大脑！！欢迎加入架构学派！！！这是一条区别于传统LLM transformer的新架构
 <p align="center">
   <a href="https://laap-agi.netlify.app">官网：https://laap-agi.netlify.app</a>
 </p>
