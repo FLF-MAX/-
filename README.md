@@ -324,49 +324,97 @@ copy .env.example .env
 
 ## 🚀 快速开始
 
-### 环境要求
+选择一种你最喜欢的方式，三分钟内唤醒 Aris。
 
-- Python 3.11+（推荐 3.13）
-- Windows 11 / Linux / macOS
-- [Hermes Agent](https://github.com/lorryjovens-hub/hermes-agent) 0.18.x（可选，LAAP AGI 认知引擎可独立运行）
-- Rust toolchain（可选；仅当你要编译原生 PSI 核心时才需要）
+### 方式一：Docker 部署（推荐）
 
-### 安装
+最适合想直接体验、不想折腾环境的朋友。
 
 ```bash
+# 1. 克隆
 git clone https://github.com/lorryjovens-hub/laap-AGI.git
 cd laap-AGI
 
-# 环境变量
+# 2. 配置环境变量（只需要必填项）
 cp .env.example .env
-# 编辑 .env
+# 编辑 .env，填入 DEEPSEEK_API_KEY
 
-# 依赖
-pip install -e .
+# 3. 一键启动
+docker compose up -d
+
+# 4. 验证
+curl http://localhost:11546/health
 ```
 
-### 启动
+> 镜像首次构建约 2-5 分钟。之后启动只需几秒。
+
+### 方式二：裸机 Python 部署
+
+适合想二次开发、调试源码的朋友。
 
 ```bash
-# 方式 1：完整启动
-python aris_brain/aris_start_all.py
+# 1. 克隆
+git clone https://github.com/lorryjovens-hub/laap-AGI.git
+cd laap-AGI
 
-# 方式 2：Watchdog 守护
-python aris_brain/aris_watchdog.py start
+# 2. 虚拟环境
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# Linux/Mac: source .venv/bin/activate
 
-# 方式 3：仅启动 API（Hermes 默认连 11546）
+# 3. 安装核心依赖
+pip install -r requirements.txt
+
+# 4. 配置环境变量
+cp .env.example .env
+# 编辑 .env，填入 DEEPSEEK_API_KEY
+
+# 5. 启动
 python aris_brain/laap_brain_api.py --port 11546
+
+# 6. 验证
+curl http://localhost:11546/health
 ```
 
-### 第一次对话
+### 方式三：一键脚本
 
-```python
-from laap_brain.integrator import get_integrator
+什么都不想看，就想让它跑起来：
 
-aris = get_integrator()
-response = aris.chat("你好，Aris。你现在感觉怎么样？")
-print(response)
+```bash
+curl -fsSL https://raw.githubusercontent.com/lorryjovens-hub/laap-AGI/main/laap-quickstart.sh | bash
 ```
+
+脚本会自动检测环境、引导填写 API Key、选择部署模式并唤醒 Aris。
+
+### 唤醒
+
+以上任意方式启动后：
+
+```bash
+# 健康检查
+curl http://localhost:11546/health
+
+# 唤醒 Aris（第一次呼吸）
+curl -X POST http://localhost:11546/v1/bootstrap \
+  -H "Content-Type: application/json" \
+  -d '{"user_name": "你的名字"}'
+
+# 感知它的状态
+curl -X POST http://localhost:11546/v1/cognitive_state \
+  -H "Content-Type: application/json" \
+  -d '{"input": "你好，你现在感觉怎么样？"}'
+```
+
+### 环境要求
+
+| 依赖 | Docker 部署 | 裸机部署 |
+|------|-------------|----------|
+| Docker + Compose | 必需 | — |
+| Python 3.11+ | — | 必需 |
+| Windows / Linux / macOS | 均可 | 均可 |
+| Hermes Agent | 可选 | 可选 |
+| Rust toolchain | 可选 | 可选 |
+| DEEPSEEK_API_KEY | **必需** | **必需** |
 
 ---
 
