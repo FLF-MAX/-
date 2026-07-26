@@ -38,7 +38,7 @@ services:
 
     # API 端口（OpenAI 兼容）
     ports:
-      - "11546:11546"
+      - "127.0.0.1:11546:11546"   //这样处理是适应避免VPS的端口被利用
 
     # 持久化状态（记忆、情绪、认知状态）
     volumes:
@@ -78,10 +78,45 @@ services:
           memory: 2G
         reservations:
           memory: 512M
+    networks:
+      - hermes-net    // 这里要跟随hermes agent的网络，需要自定义
 
+  laap-mcp:
+    image: laap-aris:latest
+    container_name: laap-mcp
+    restart: unless-stopped
+
+    # 运行真正的 MCP 服务器（SSE 模式），不是 HTTP API
+    command: ["python", "/app/mcp_server/laap_mcp_server.py", "--port", "11547"]
+
+    ports:
+      - "127.0.0.1:11546:11546"      //这样处理是适应避免VPS的端口被利用
+
+    environment:
+      - LAAP_API_BASE=http://laap-mcp:11547
+
+    volumes:
+      - ./mcp_server/laap_mcp_server.py:/app/mcp_server/laap_mcp_server.py:ro
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11547/sse')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    depends_on:
+      - laap-aris
+
+    networks:
+      - hermes-net // 这里要跟随hermes agent的网络，需要自定义
 # ── 持久化卷 ──────────────────────────────────────────────
 volumes:
   aris-state:
     name: laap-aris-state
   aris-memory:
     name: laap-aris-memory
+    
+networks:
+  hermes-net:  // 这里要跟随hermes agent的网络，需要自定义
+    external: true
