@@ -38,7 +38,7 @@ services:
 
     # API 端口（OpenAI 兼容）
     ports:
-      - "11546:11546"
+      - "127.0.0.1:11546:11546"
 
     # 持久化状态（记忆、情绪、认知状态）
     volumes:
@@ -79,6 +79,35 @@ services:
         reservations:
           memory: 512M
 
+  tino-mcp:
+    image: laap2-tino:latest
+    container_name: laap-mcp
+    restart: unless-stopped
+
+    # 运行真正的 MCP 服务器（SSE 模式），不是 HTTP API
+    command: ["python", "/app/mcp_server/laap_mcp_server.py", "--port", "11547"]
+
+    ports:
+      - "127.0.0.1:11546:11546"
+
+    environment:
+      - LAAP_API_BASE=http://tino-core:11547
+
+    volumes:
+      - ./mcp_server/laap_mcp_server.py:/app/mcp_server/laap_mcp_server.py:ro
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11453/sse')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    depends_on:
+      - tino-core
+
+    networks:
+      - hermes-net
 # ── 持久化卷 ──────────────────────────────────────────────
 volumes:
   aris-state:
