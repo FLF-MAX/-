@@ -1,4 +1,6 @@
 
+
+
 <img width="1023" height="906" alt="53df74c59d18508e2a05f43402bf5a35" src="https://github.com/user-attachments/assets/c1cadf3e-f162-43bf-b729-74f2f152d5b1" />
 
 记得配合Hermes等等agent使用，这是agent的上位大脑！！欢迎加入架构学派！！！这是一条区别于传统LLM transformer的新架构
