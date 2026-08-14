@@ -613,8 +613,65 @@ async def handle_monitor_ui(request):
 
 
 async def handle_v1_root(request):
-    """/v1 API 根 — 与 / 相同的信息页，方便框架 base_url 探测。"""
-    return await handle_root(request)
+    """GET /v1 — 入口：浏览器得 HTML 导航页，API 客户端得 JSON。"""
+    accept = request.headers.get("Accept", "")
+    want_json = "application/json" in accept and "text/html" not in accept
+    if want_json:
+        return await handle_root(request)
+    html = f"""<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>LAAP Brain — Aris 认知引擎</title>
+<style>
+  body {{ font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; max-width: 760px; margin: 40px auto; padding: 0 20px; color: #222; background: #fafafa; }}
+  h1 {{ font-size: 26px; border-bottom: 2px solid #4a90d9; padding-bottom: 8px; }}
+  .panel {{ background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px 20px; margin: 14px 0; }}
+  a {{ color: #4a90d9; text-decoration: none; }}
+  a:hover {{ text-decoration: underline; }}
+  .big {{ display: block; font-size: 18px; padding: 14px; background: #eef4fb; border-radius: 6px; margin: 10px 0; }}
+  .tag {{ display: inline-block; font-size: 12px; background: #4a90d9; color: #fff; border-radius: 3px; padding: 2px 8px; margin-left: 8px; }}
+  code {{ background: #f0f0f0; padding: 2px 6px; border-radius: 3px; }}
+  ul {{ line-height: 1.9; }}
+</style>
+</head>
+<body>
+  <h1>🧠 LAAP Brain — Aris 认知引擎</h1>
+  <p>HTTP 服务运行中 · OpenAI 兼容 API · Zero-LLM 认知循环</p>
+
+  <div class="panel">
+    <a class="big" href="/v1/monitor/ui">📊 认知监控面板 <span class="tag">可视化</span></a>
+    <p>Aris 的五维需求向量、情绪、路由命中、事件流实时图表</p>
+  </div>
+
+  <div class="panel">
+    <a class="big" href="/v1/models">🤖 模型列表</a>
+    <p>laap-core / laap-qre / laap-rules</p>
+  </div>
+
+  <div class="panel">
+    <h3>📡 API 端点</h3>
+    <ul>
+      <li><code>POST /v1/chat/completions</code> — 对话（OpenAI 兼容）</li>
+      <li><code>POST /v1/cognitive_state</code> — PSI 认知状态</li>
+      <li><code>POST /v1/recall_memory</code> — 召回记忆</li>
+      <li><code>POST /v1/reflect</code> — 回合反思</li>
+      <li><code>POST /v1/express</code> — TTS / Live2D 表情参数</li>
+      <li><code>POST /v1/bootstrap</code> — 唤醒新实例</li>
+      <li><code>GET /v1/personality</code> — 人格（可 POST 设置）</li>
+      <li><code>GET /v1/bond</code> — 依恋关系状态</li>
+      <li><code>GET /v1/identity</code> — 统一身份状态</li>
+      <li><code>GET /health</code> — 健康检查</li>
+    </ul>
+  </div>
+
+  <div class="panel">
+    <h3>💬 聊天界面</h3>
+    <p>另有独立聊天窗口：<a href="http://localhost:8935">http://localhost:8935</a></p>
+  </div>
+</body>
+</html>"""
+    return web.Response(text=html, content_type="text/html", charset="utf-8")
 
 
 async def handle_root(request):
