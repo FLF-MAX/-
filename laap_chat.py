@@ -1,11 +1,14 @@
 """LAAP 对话窗口 — 网页聊天界面，后端调用 LLM（opencode zen / deepseek-v4-flash-free）
 启动: python laap_chat.py  →  http://localhost:8935
 """
-import os, sys, json, time
+import os, sys, json, time, logging, threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("laap_chat")
 
 # 加载 .env
 try:
@@ -23,15 +26,22 @@ from laap.agi.llm_integration import create_deepseek_integration
 
 app = Flask(__name__)
 
-# LLM 集成（惰性初始化）
+# LLM 集成（惰性初始化 + 线程安全）
 _integration = None
+_integration_lock = threading.Lock()
 def get_llm():
+    """获取 LLM 集成器（线程安全懒加载，避免多请求并发竞态）。"""
     global _integration
-    if _integration is None:
-        key = os.environ.get("DEEPSEEK_API_KEY", "")
-        _integration = create_deepseek_integration(key)
-        ok = _integration.provider.initialize()
-        print(f"[LLM] initialize={ok} model={os.environ.get('LLM_MODEL')} base={os.environ.get('DEEPSEEK_BASE_URL')}")
+    if _integration is not None:
+        return _integration
+    with _integration_lock:
+        if _integration is None:
+            key = os.environ.get("DEEPSEEK_API_KEY", "")
+            if not key:
+                logger.warning("DEEPSEEK_API_KEY 未配置 — LLM 请求将退化到模板回复")
+            _integration = create_deepseek_integration(key)
+            ok = _integration.provider.initialize()
+            logger.info(f"[LLM] initialize={ok} model={os.environ.get('LLM_MODEL')} base={os.environ.get('DEEPSEEK_BASE_URL')}")
     return _integration
 
 SYSTEM_PROMPT = (
@@ -48,7 +58,7 @@ def chat():
     body = request.get_json(force=True, silent=True) or {}
     messages = body.get("messages", [])
     if not messages:
-        return jsonify({"error": "no messages"}), 400
+        return jsonify({"error": "no messages provided"}), 400
 
     # 组装完整上下文
     full = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
@@ -56,18 +66,26 @@ def chat():
 
     try:
         llm = get_llm()
+    except Exception as e:
+        logger.exception(f"LLM 初始化失败: {e}")
+        return jsonify({"reply": "（Aris 暂时无法启动语言能力，请检查 DEEPSEEK_API_KEY）", "engine": "error"}), 503
+
+    try:
         result = llm.provider.call(
             prompt=user_text,
             system_prompt=SYSTEM_PROMPT,
             max_tokens=1000,
             temperature=0.7,
         )
-        if result.success:
-            reply = result.reply if hasattr(result, "reply") else result.text
-            return jsonify({"reply": reply, "engine": "llm", "usage": result.total_tokens if hasattr(result, "total_tokens") else 0})
-        return jsonify({"reply": f"（Aris 暂时无法回复：{result.error}）", "engine": "error"}), 200
     except Exception as e:
-        return jsonify({"reply": f"（出错了：{e}）", "engine": "error"}), 200
+        logger.exception(f"LLM 调用异常: {e}")
+        return jsonify({"reply": f"（Aris 调用语言服务时出错）", "engine": "error"}), 500
+
+    if result.success:
+        reply = result.reply if hasattr(result, "reply") else result.text
+        return jsonify({"reply": reply, "engine": "llm", "usage": result.total_tokens if hasattr(result, "total_tokens") else 0})
+    logger.warning(f"LLM 返回失败: {result.error}")
+    return jsonify({"reply": f"（Aris 暂时无法回复：{result.error}）", "engine": "error"}), 200
 
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="zh-CN">

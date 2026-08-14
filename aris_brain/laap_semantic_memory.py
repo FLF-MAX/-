@@ -27,7 +27,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 BRAIN_DIR = Path(__file__).resolve().parent
-MEMORY_PATH = BRAIN_DIR / "laap_semantic_memory.json"
+MEMORY_PATH = Path(os.environ.get("LAAP_MEMORY_PATH", str(BRAIN_DIR / "laap_semantic_memory.json")))
 
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_EMBEDDING_DIM = 1536

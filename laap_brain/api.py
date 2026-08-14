@@ -465,6 +465,153 @@ async def handle_monitor(request):
     })
 
 
+# ── 认知监控可视化面板（HTML UI）────────────────────────────
+
+MONITOR_HTML = """<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aris 认知监控面板 · LAAP</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a12;color:#d8d8e8;font-family:"Microsoft YaHei",system-ui,sans-serif;padding:20px}
+h1{font-size:18px;margin-bottom:4px;color:#fff}
+.sub{color:#888;font-size:12px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.card{background:#14141f;border:1px solid #26263a;border-radius:12px;padding:16px}
+.card h2{font-size:13px;color:#aab;margin-bottom:12px;font-weight:600;letter-spacing:.5px}
+.bars{margin-top:6px}
+.bar{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.bar .label{width:64px;font-size:12px;color:#999;text-align:right}
+.bar .track{flex:1;background:#1e1e2e;border-radius:4px;height:14px;overflow:hidden}
+.bar .fill{height:100%;border-radius:4px;transition:width .4s}
+.badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;margin-right:6px}
+.badge.emotion{background:#1a3a2a;color:#7ee2a0}
+.badge.focus{background:#1a2a3a;color:#7eb6e2}
+.stat{display:flex;justify-content:space-between;font-size:12px;color:#bbb;padding:4px 0;border-bottom:1px dashed #222}
+.stat span:first-child{color:#888}
+#events{max-height:260px;overflow-y:auto;font-size:11px;font-family:Consolas,monospace}
+#events div{padding:3px 0;border-bottom:1px solid #1c1c2a;color:#99a}
+#events .ts{color:#556}
+#status{font-size:12px;color:#66dd66}
+canvas{display:block;margin:0 auto}
+</style>
+</head>
+<body>
+<h1>🧠 Aris 认知监控面板</h1>
+<div class="sub">LAAP Cognitive Monitor · 轮询 /v1/monitor · <span id="status">连接中…</span></div>
+<div class="grid">
+  <div class="card">
+    <h2>五维需求向量</h2>
+    <canvas id="radar" width="260" height="200"></canvas>
+  </div>
+  <div class="card">
+    <h2>需求值</h2>
+    <div class="bars" id="needs"></div>
+  </div>
+  <div class="card">
+    <h2>认知状态</h2>
+    <div id="state"></div>
+  </div>
+  <div class="card">
+    <h2>路由统计</h2>
+    <div id="routes"></div>
+  </div>
+  <div class="card" style="grid-column:1/-1">
+    <h2>事件流</h2>
+    <div id="events">（暂无事件）</div>
+  </div>
+</div>
+<script>
+const NEED_NAMES=['competence','relatedness','growth','certainty','autonomy'];
+const COLORS=['#66c2ff','#ff9e66','#7ee2a0','#c9a0ff','#ffd166'];
+function drawRadar(values){
+  const cv=document.getElementById('radar'),ctx=cv.getContext('2d');
+  const cx=130,cy=100,R=72,N=values.length;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  for(let ring=1;ring<=4;ring++){
+    ctx.beginPath();
+    for(let i=0;i<N;i++){const a=-Math.PI/2+i*2*Math.PI/N,r=R*ring/4;
+      const x=cx+r*Math.cos(a),y=cy+r*Math.sin(a);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.closePath();ctx.strokeStyle='#26263a';ctx.stroke();
+  }
+  for(let i=0;i<N;i++){const a=-Math.PI/2+i*2*Math.PI/N;
+    const x=cx+R*Math.cos(a),y=cy+R*Math.sin(a);
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(x,y);
+    ctx.strokeStyle='#26263a';ctx.stroke();
+    ctx.fillStyle='#99a';ctx.font='11px sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText(NEED_NAMES[i],cx+(R+18)*Math.cos(a),cy+(R+14)*Math.sin(a));
+  }
+  ctx.beginPath();
+  for(let i=0;i<N;i++){const a=-Math.PI/2+i*2*Math.PI/N,r=R*Math.max(0.02,values[i]||0);
+    const x=cx+r*Math.cos(a),y=cy+r*Math.sin(a);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+  ctx.closePath();ctx.fillStyle='rgba(102,194,255,.25)';ctx.fill();
+  ctx.strokeStyle='#66c2ff';ctx.lineWidth=2;ctx.stroke();
+}
+function render(d){
+  const needs=d.psi.needs||{};
+  // bars
+  const nb=document.getElementById('needs');nb.innerHTML='';
+  NEED_NAMES.forEach((n,i)=>{
+    const v=needs[n]||0;
+    const el=document.createElement('div');el.className='bar';
+    el.innerHTML=`<span class="label">${n}</span><div class="track"><div class="fill" style="width:${v*100}%;background:${COLORS[i]}"></div></div><span style="font-size:11px;color:#aaa">${(v*100).toFixed(0)}%</span>`;
+    nb.appendChild(el);
+  });
+  drawRadar(NEED_NAMES.map(n=>needs[n]||0));
+  // state
+  const p=d.psi;
+  document.getElementById('state').innerHTML=
+    `<div class="stat"><span>情绪</span><span><span class="badge emotion">${p.emotion||'neutral'}</span></span></div>`+
+    `<div class="stat"><span>唤醒度</span><span>${((p.arousal||0)*100).toFixed(0)}%</span></div>`+
+    `<div class="stat"><span>自我在场感</span><span>${((p.self_presence||0)*100).toFixed(0)}%</span></div>`+
+    `<div class="stat"><span>注意力</span><span><span class="badge focus">${p.attention_focus||'idle'}</span></span></div>`+
+    `<div class="stat"><span>认知周期</span><span>${p.cycle||0}</span></div>`;
+  // routes
+  const b=d.bus||{};
+  const total=b.route_count||0;
+  const fmt=v=>total?(100*v/total).toFixed(0)+'%':'—';
+  document.getElementById('routes').innerHTML=
+    `<div class="stat"><span>路由总数</span><span>${total}</span></div>`+
+    `<div class="stat"><span>QRE 命中</span><span>${b.qre_hits||0} (${fmt(b.qre_hits)})</span></div>`+
+    `<div class="stat"><span>V12 命中</span><span>${b.v12_hits||0} (${fmt(b.v12_hits)})</span></div>`+
+    `<div class="stat"><span>QLG 命中</span><span>${b.qlg_hits||0} (${fmt(b.qlg_hits)})</span></div>`;
+  // events
+  const ev=d.events||[];
+  const box=document.getElementById('events');
+  if(ev.length){
+    box.innerHTML=ev.slice().reverse().map(e=>{
+      const ts=(e.timestamp||'').replace('T',' ').slice(5,19);
+      return `<div><span class="ts">${ts}</span> [${e.event_type}] ${(e.payload&&e.payload.text)||(e.payload&&e.payload.decision)||''}</div>`;
+    }).join('');
+  }
+}
+async function poll(){
+  try{
+    const r=await fetch('/v1/monitor');
+    const d=await r.json();
+    render(d);
+    document.getElementById('status').textContent='在线 · '+new Date().toLocaleTimeString();
+  }catch(e){
+    document.getElementById('status').textContent='离线：'+e;
+  }
+}
+poll();setInterval(poll,2000);
+</script>
+</body>
+</html>
+"""
+
+
+async def handle_monitor_ui(request):
+    """GET /v1/monitor/ui — 认知监控可视化面板（HTML）。"""
+    return web.Response(text=MONITOR_HTML, content_type="text/html", charset="utf-8")
+
+
 async def handle_root(request):
     return web.json_response({
         "name": "LAAP Brain API",
@@ -473,6 +620,7 @@ async def handle_root(request):
             "/": "This info",
             "/v1/models": "List available models",
             "/v1/monitor": "Cognitive state monitor (needs/emotion/routes/events)",
+            "/v1/monitor/ui": "Cognitive monitor dashboard (HTML)",
             "/v1/chat/completions": "Chat completions (OpenAI-compatible)",
             "/v1/cognitive_state": "Get PSI cognitive state",
             "/v1/recall_memory": "Recall LAAP memories",
@@ -501,6 +649,7 @@ def create_app() -> web.Application:
     app.router.add_get("/", handle_root)
     app.router.add_get("/health", handle_health)
     app.router.add_get("/v1/monitor", handle_monitor)
+    app.router.add_get("/v1/monitor/ui", handle_monitor_ui)
     app.router.add_get("/v1/models", handle_models)
     app.router.add_post("/v1/chat/completions", handle_chat_completions)
     app.router.add_post("/v1/cognitive_state", handle_cognitive_state)

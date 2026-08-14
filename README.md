@@ -300,8 +300,10 @@ User Message
 └──────────────────────────────────────────────┘
                    │
                    ▼
-              User Response
+               User Response
 ```
+
+> 📐 更详细的分层架构与各层 LLM 依赖边界，见 [docs/ARCHITECTURE_LAYERS.md](docs/ARCHITECTURE_LAYERS.md)。
 
 ---
 
