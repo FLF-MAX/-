@@ -45,3 +45,6 @@ aris_brain = ["state/**/*", "corpus/**/*", "memory/**/*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "benchmark: 认知能力基准测试（量化能力量级，可跳过以加速 CI）",
+]

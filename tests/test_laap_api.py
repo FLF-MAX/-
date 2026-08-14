@@ -200,3 +200,29 @@ async def test_bootstrap_endpoint():
         assert data.get("identity")
     finally:
         await client.close()
+
+
+@pytest.mark.asyncio
+async def test_monitor_endpoint():
+    """/v1/monitor 应返回 PSI 状态快照 + 路由统计 + 事件日志。"""
+    app = create_app()
+    server = TestServer(app)
+    client = TestClient(server)
+    await client.start_server()
+    try:
+        resp = await client.get("/v1/monitor")
+        assert resp.status == 200
+        data = await resp.json()
+        # PSI 快照：需求向量应有五维
+        needs = data.get("psi", {}).get("needs")
+        assert needs is not None
+        assert len(needs) == 5
+        # 路由统计结构
+        bus = data.get("bus", {})
+        assert "route_count" in bus
+        # 事件日志是列表
+        assert isinstance(data.get("events"), list)
+        # 时间戳
+        assert "timestamp" in data
+    finally:
+        await client.close()

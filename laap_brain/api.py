@@ -442,6 +442,29 @@ async def handle_get_identity(request):
         return web.json_response({"error": str(e)}, status=500)
 
 
+async def handle_monitor(request):
+    """GET /v1/monitor — 认知状态监控端点（需求向量 / 情绪 / 路由统计 / 事件流）。
+
+    供实时状态监控面板与调试工具消费。返回内容：
+      - psi: 类型化 PSI 状态快照（需求向量、情绪、唤醒度、自我在场感）
+      - bus: CognitiveBus 路由统计（route_count、QRE/V12/QLG 命中率）
+      - events: 最近的事件日志（用户消息 / 路由决策）
+    """
+    from aris_brain.cognitive_bus import get_bus
+
+    bus = get_bus()
+
+    snapshot = bus.snapshot()
+    psidict = snapshot.to_dict() if snapshot else {}
+
+    return web.json_response({
+        "psi": psidict,
+        "bus": bus.stats(),
+        "events": bus.read_event_log(limit=50),
+        "timestamp": time.time(),
+    })
+
+
 async def handle_root(request):
     return web.json_response({
         "name": "LAAP Brain API",
@@ -449,6 +472,7 @@ async def handle_root(request):
         "endpoints": {
             "/": "This info",
             "/v1/models": "List available models",
+            "/v1/monitor": "Cognitive state monitor (needs/emotion/routes/events)",
             "/v1/chat/completions": "Chat completions (OpenAI-compatible)",
             "/v1/cognitive_state": "Get PSI cognitive state",
             "/v1/recall_memory": "Recall LAAP memories",
@@ -476,6 +500,7 @@ def create_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", handle_root)
     app.router.add_get("/health", handle_health)
+    app.router.add_get("/v1/monitor", handle_monitor)
     app.router.add_get("/v1/models", handle_models)
     app.router.add_post("/v1/chat/completions", handle_chat_completions)
     app.router.add_post("/v1/cognitive_state", handle_cognitive_state)

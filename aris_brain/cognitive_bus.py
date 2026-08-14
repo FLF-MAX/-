@@ -21,7 +21,14 @@ import os
 import time
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any, Literal
+from typing import Optional, Dict, Any, List, Literal
+
+from aris_brain.schemas.events import (
+    CognitiveEvent,
+    EventSource,
+    RouteResult,
+    PsiStateSnapshot,
+)
 
 logger = logging.getLogger("aris.cognitive_bus")
 
@@ -432,6 +439,83 @@ class CognitiveBus:
     # ════════════════════════════════════════════════════════
     # 5. 状态查询
     # ════════════════════════════════════════════════════════
+
+    # ── 类型化接口（基于 aris_brain.schemas.events）─────────
+
+    def route_typed(self, user_message: str, timeout_ms: float = 50.0) -> RouteResult:
+        """类型化路由 — 返回 RouteResult 而非裸 dict。
+
+        与 route() 等价，但结果被封装为类型化契约，
+        供需要强类型的订阅者（监控面板 / AGI 订阅者）使用。
+        """
+        raw = self.route(user_message, timeout_ms)
+        return RouteResult.from_dict(raw)
+
+    def emit_event(self, event: CognitiveEvent) -> None:
+        """广播一个类型化认知事件到 AGI 订阅者。
+
+        AGI 订阅者通过模块级注册表接收事件（若已激活）。
+        当前实现：写入 state/agi_events.jsonl 追加日志，
+        供监控面板与调试工具消费。
+        """
+        try:
+            log_file = self.state_dir / "agi_events.jsonl"
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(event.to_dict(), ensure_ascii=False) + "\n")
+        except Exception as e:
+            logger.debug(f"[CognitiveBus] emit_event 写日志失败: {e}")
+
+    def emit_user_event(self, user_message: str, session_id: Optional[str] = None) -> CognitiveEvent:
+        """构造并广播 user_message 事件。"""
+        event = CognitiveEvent(
+            event_type="user_message",
+            source=EventSource.USER,
+            payload={"text": user_message},
+            session_id=session_id,
+        )
+        self.emit_event(event)
+        return event
+
+    def emit_route_event(self, result: RouteResult, session_id: Optional[str] = None) -> CognitiveEvent:
+        """构造并广播 route_decision 事件。"""
+        event = CognitiveEvent(
+            event_type="route_decision",
+            source=EventSource.COGNITIVE_BUS,
+            payload={
+                "decision": result.decision,
+                "source": result.source,
+                "confidence": result.confidence,
+                "latency_us": result.latency_us,
+                "use_engine_output": result.use_engine_output,
+            },
+            session_id=session_id,
+        )
+        self.emit_event(event)
+        return event
+
+    def snapshot(self) -> Optional[PsiStateSnapshot]:
+        """返回类型化 PSI 状态快照（供监控面板用）。"""
+        state = self.read_psi_state()
+        if state is None:
+            return None
+        return PsiStateSnapshot.from_state(state)
+
+    def read_event_log(self, limit: int = 200) -> List[Dict[str, Any]]:
+        """读取事件日志末尾 limit 条（供监控面板用）。"""
+        log_file = self.state_dir / "agi_events.jsonl"
+        if not log_file.exists():
+            return []
+        events = []
+        with open(log_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    events.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+        return events[-limit:]
 
     def stats(self) -> dict:
         """路由统计。"""
