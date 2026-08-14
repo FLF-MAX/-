@@ -17,6 +17,8 @@ state/
 state/*.json
 state/**/*.json
 !state/.gitkeep
+agi_state/
+agi_state/*.json
 snapshots/
 logs/
 *.log

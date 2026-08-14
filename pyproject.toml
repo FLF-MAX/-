@@ -29,6 +29,7 @@ dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 [project.scripts]
 laap-brain = "laap_brain.api:main"
 laap-aris = "aris_brain.aris_start_all:main"
+laap = "laap_brain.cli:main"
 
 [tool.setuptools.packages.find]
 include = [

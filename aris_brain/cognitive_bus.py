@@ -20,6 +20,7 @@ import json
 import os
 import time
 import logging
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Literal
 
@@ -68,6 +69,16 @@ class CognitiveBus:
         self.poll_interval = poll_interval_us / 1_000_000  # μs → s
         self.max_poll = max_poll_attempts
 
+        # 并发安全：emit_event 写 JSONL、_stats 计数、send_to_psi_core 原子写
+        # 在真实场景中事件来自多个源（用户输入 / AGI 订阅者 / 定时器），
+        # 必须保证行不交织、计数不丢失。
+        # 注意：Windows 上 os.replace 要求目标文件未被任何句柄占用，
+        # 因此 send_to_psi_core 的 tmp→replace 段必须用锁保护，否则并发
+        # 线程会抛 WinError 32（文件正被使用）。
+        self._event_lock = threading.Lock()
+        self._stats_lock = threading.Lock()
+        self._io_lock = threading.Lock()
+
         # 缓存上次读取的时间戳，用于检测新输出
         self._last_psi_cycle: int = 0
         self._last_engine: str = "none"
@@ -93,12 +104,14 @@ class CognitiveBus:
 
             self.input_queue.parent.mkdir(parents=True, exist_ok=True)
             # 原子写：与 psi_core 引擎的 send_input 并发写同一文件，
-            # 临时文件 + os.replace 保证 reader 永远看到完整内容
-            tmp = self.input_queue.with_name(self.input_queue.name + ".tmp")
-            tmp.write_text(
-                json.dumps(payload, ensure_ascii=False), encoding="utf-8"
-            )
-            os.replace(tmp, self.input_queue)
+            # 临时文件 + os.replace 保证 reader 永远看到完整内容。
+            # Windows 上 os.replace 要求目标文件无打开句柄，必须加锁串行化。
+            with self._io_lock:
+                tmp = self.input_queue.with_name(self.input_queue.name + ".tmp")
+                tmp.write_text(
+                    json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+                )
+                os.replace(tmp, self.input_queue)
             return True
         except Exception as e:
             logger.warning(f"[CognitiveBus] 写入 input_queue 失败: {e}")
@@ -168,7 +181,9 @@ class CognitiveBus:
                 psi_state: dict (full state for context)
                 cognitive_context: str (formatted for LLM injection)
         """
+        self._stats_lock.acquire()
         self._stats["route_count"] += 1
+        self._stats_lock.release()
         previous_cycle = self._last_psi_cycle
 
         # 1. 记录发送前的时间
@@ -213,7 +228,9 @@ class CognitiveBus:
         # ── 路由规则 ──
         if engine.startswith("qre_"):
             # Aris 量子推理引擎产生了输出
+            self._stats_lock.acquire()
             self._stats["qre_hits"] += 1
+            self._stats_lock.release()
             confidence = self._estimate_confidence(state)
             ctx = self._format_qre_context(state, user_message, confidence)
             return self._make_decision(
@@ -228,7 +245,9 @@ class CognitiveBus:
 
         elif engine == "v12_quantum_kernel":
             # V12.1 精确/语义匹配
+            self._stats_lock.acquire()
             self._stats["v12_hits"] += 1
+            self._stats_lock.release()
             ctx = self._format_v12_context(state, user_message)
             return self._make_decision(
                 decision="v12_kernel",
@@ -242,7 +261,9 @@ class CognitiveBus:
 
         elif engine == "qlg":
             # QLG 模板 — 质量尚可，让 LLM 润色
+            self._stats_lock.acquire()
             self._stats["qlg_hits"] += 1
+            self._stats_lock.release()
             ctx = self._format_qlg_context(state, user_message)
             return self._make_decision(
                 decision="qlg_template",
@@ -460,7 +481,7 @@ class CognitiveBus:
         """
         try:
             log_file = self.state_dir / "agi_events.jsonl"
-            with open(log_file, "a", encoding="utf-8") as f:
+            with self._event_lock, open(log_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(event.to_dict(), ensure_ascii=False) + "\n")
         except Exception as e:
             logger.debug(f"[CognitiveBus] emit_event 写日志失败: {e}")
@@ -519,7 +540,8 @@ class CognitiveBus:
 
     def stats(self) -> dict:
         """路由统计。"""
-        s = self._stats.copy()
+        with self._stats_lock:
+            s = self._stats.copy()
         if s["route_count"] > 0:
             s["qre_rate"] = s["qre_hits"] / s["route_count"]
             s["v12_rate"] = s["v12_hits"] / s["route_count"]

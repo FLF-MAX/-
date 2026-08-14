@@ -54,6 +54,20 @@ def bus(tmp_path):
     return CognitiveBus(state_dir=str(tmp_path))
 
 
+@pytest.fixture()
+def memory(tmp_path):
+    """隔离的语义记忆实例（独立临时文件 + 真实默认 embedder）。
+
+    直接实例化 LaapSemanticMemory（模块级 get_memory() 会读写真实文件，
+    基准测试必须隔离）。add 与 recall 用同一实例，保证 embedder 一致。
+
+    注意：默认使用本地 sentence-transformers 模型（离线 bge-small），
+    单条 embed ~20ms，数百条数据规模下 add 耗时在可接受范围。
+    """
+    import aris_brain.laap_semantic_memory as sem
+    return sem.LaapSemanticMemory(path=tmp_path / "mem.json")
+
+
 def _state_of(engine: PsiCoreEngine) -> PsiStateSnapshot:
     """从引擎当前状态构建类型化快照。"""
     return PsiStateSnapshot.from_state(engine._state.to_dict())
@@ -108,16 +122,6 @@ class TestPsiNeedDynamics:
 class TestMemoryFidelity:
     """语义记忆的写入-召回保真与抗干扰能力。"""
 
-    @pytest.fixture()
-    def memory(self, tmp_path):
-        """隔离的语义记忆实例（独立临时文件 + 固定 embedder）。
-
-        直接实例化 LaapSemanticMemory（模块级 get_memory() 会读写真实文件，
-        基准测试必须隔离）。add 与 recall 用同一实例，保证 embedder 一致。
-        """
-        import aris_brain.laap_semantic_memory as sem
-        return sem.LaapSemanticMemory(path=tmp_path / "mem.json")
-
     def test_roundtrip_recall(self, memory):
         """写入记忆后，按关键词能召回原内容。"""
         probe = "用户的宠物猫叫雪球，她三岁了"
@@ -135,6 +139,44 @@ class TestMemoryFidelity:
         results = memory.recall("生日 派对 周六", top_k=10) or []
         texts = [r.get("text", "") for r in results]
         assert any(target in t for t in texts), f"目标记忆被淹没: {texts[:5]}"
+
+
+class TestRecallScalability:
+    """语义检索的扩展性基线 — 记忆规模增长时延迟的量级。
+
+    说明: 当前召回用线性扫描 + 余弦相似度（O(n·d)）。
+    该测试量化不同规模下的延迟，作为引入 faiss/annoy 前
+    的基线数据：若 500 条记忆召回已 > 200ms，则应考虑向量索引。
+    """
+
+    def test_recall_latency_scales_gracefully(self, memory):
+        import time
+
+        # 规模阶梯：10 / 100 / 500 条记忆
+        scales = [10, 100, 500]
+        timings = {}
+
+        for n in scales:
+            start = len(memory.memories)
+            for i in range(start, n):
+                memory.add(
+                    f"规模测试记录 {i}：关于学习和成长的随机话题内容填充",
+                    meta={"type": "scale"},
+                )
+            t0 = time.perf_counter()
+            for _ in range(5):
+                memory.recall("学习 成长", top_k=3)
+            elapsed_ms = (time.perf_counter() - t0) / 5 * 1000
+            timings[n] = elapsed_ms
+
+        # 500 条记忆时，单次召回应 < 200ms（线性扫描的合理性上界）
+        assert timings[500] < 200.0, (
+            f"500 条记忆召回延迟 {timings[500]:.1f}ms，超过线性扫描上界，"
+            f"应考虑引入向量索引（faiss/annoy）"
+        )
+
+        # 记录规模阶梯，便于趋势对比
+        print(f"\n[基准] 记忆召回扩展性: {timings}")
 
 
 # ════════════════════════════════════════════════════════

@@ -407,8 +407,10 @@ def _get_embedding_provider() -> EmbeddingProvider:
 
 
 class LaapSemanticMemory:
-    def __init__(self, path: Path = MEMORY_PATH):
+    def __init__(self, path: Path = MEMORY_PATH, flush_threshold: int = 50):
         self.path = path
+        self.flush_threshold = max(1, int(flush_threshold))
+        self._dirty = False
         self.provider = _get_embedding_provider()
         self.backend = _get_vector_db_backend(path)
         self.memories: List[Dict] = []
@@ -444,7 +446,14 @@ class LaapSemanticMemory:
         logger.info(f"Loaded {len(self.memories)} semantic memories")
 
     def add(self, text: str, meta: Optional[Dict] = None) -> str:
-        """Add a memory with auto-computed embedding."""
+        """Add a memory with auto-computed embedding.
+
+        性能说明（修复 O(n²) 写盘瓶颈）:
+          - ChromaDB backend: 实时增量索引，直接 backend.add
+          - JSON backend: 内存为真相，追加后标记 dirty，达到 flush_threshold
+            批量落盘（原子替换）。recall 直接从内存扫描，避免每次读盘。
+            调用方可在关键节点显式调用 flush() 强制持久化。
+        """
         mem_id = hashlib.md5(f"{text}:{datetime.now(timezone.utc).isoformat()}".encode()).hexdigest()[:16]
         try:
             embedding = self.provider.embed([text])[0]
@@ -461,13 +470,30 @@ class LaapSemanticMemory:
         }
         self.memories.append(memory)
         try:
-            self.backend.add(memory)
+            if isinstance(self.backend, JsonMemoryBackend):
+                self._dirty = True
+                if len(self.memories) % self.flush_threshold == 0:
+                    self.flush()
+            else:
+                self.backend.add(memory)
         except Exception as e:
             logger.warning(f"Backend add failed, falling back to JSON save: {e}")
             # Last resort: ensure JSON file is consistent
             if not isinstance(self.backend, JsonMemoryBackend):
                 JsonMemoryBackend(self.path)._save(self.memories)
         return mem_id
+
+    def flush(self) -> None:
+        """强制将内存中的全部记忆落盘（JSON backend）。
+
+        ChromaDB backend 实时写索引，无需 flush，此方法对它是空操作。
+        """
+        if isinstance(self.backend, JsonMemoryBackend) and self._dirty:
+            try:
+                self.backend._save(self.memories)
+                self._dirty = False
+            except Exception as e:
+                logger.warning(f"Flush JSON memory failed: {e}")
 
     def recall(self, query: str, top_k: int = 5, min_score: float = 0.0) -> List[Dict]:
         """Retrieve top-k memories by cosine similarity."""
@@ -480,11 +506,16 @@ class LaapSemanticMemory:
             logger.warning(f"Query embedding failed: {e}")
             return []
 
-        try:
-            scores = self.backend.recall(query_vec, top_k=top_k, min_score=min_score)
-        except Exception as e:
-            logger.warning(f"Backend recall failed: {e}")
-            return []
+        # JSON backend: 直接从内存扫描（避免每次全量读盘）。
+        # ChromaDB backend: 走实时向量索引。
+        if isinstance(self.backend, JsonMemoryBackend):
+            scores = self._scan_memories(query_vec, top_k, min_score)
+        else:
+            try:
+                scores = self.backend.recall(query_vec, top_k=top_k, min_score=min_score)
+            except Exception as e:
+                logger.warning(f"Backend recall failed: {e}")
+                return []
 
         results = []
         for score, mem in scores:
@@ -498,12 +529,46 @@ class LaapSemanticMemory:
             results.append(item)
         return results
 
+    def _scan_memories(
+        self, query_vec: np.ndarray, top_k: int, min_score: float
+    ) -> List[Tuple[float, Dict]]:
+        """内存余弦相似度扫描（JSON backend 的召回路径）。"""
+        scores: List[Tuple[float, Dict]] = []
+        for mem in self.memories:
+            mem_vec = np.array(mem.get("embedding", []), dtype=np.float32)
+            if mem_vec.size == 0 or query_vec.size == 0:
+                continue
+            if mem_vec.shape != query_vec.shape:
+                continue
+            norm = np.linalg.norm(query_vec) * np.linalg.norm(mem_vec)
+            if norm == 0:
+                continue
+            score = float(np.dot(query_vec, mem_vec) / norm)
+            if score >= min_score:
+                scores.append((score, mem))
+        scores.sort(key=lambda x: x[0], reverse=True)
+        return scores[:top_k]
+
     def list_all(self, limit: int = 100) -> List[Dict]:
         return self.backend.list_all(limit=limit)
 
 
 # Module-level singleton
 _MEMORY: Optional[LaapSemanticMemory] = None
+
+
+def _flush_on_exit() -> None:
+    """进程退出前强制落盘，避免懒 flush 丢失最后一批记忆。"""
+    global _MEMORY
+    if _MEMORY is not None:
+        try:
+            _MEMORY.flush()
+        except Exception as e:
+            logger.warning(f"Final memory flush failed: {e}")
+
+
+import atexit
+atexit.register(_flush_on_exit)
 
 
 def get_memory() -> LaapSemanticMemory:
