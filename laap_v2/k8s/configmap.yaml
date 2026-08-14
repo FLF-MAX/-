@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: laap-v2-config
+  namespace: laap-v2
+data:
+  LAAP_HOST: "0.0.0.0"
+  LAAP_PORT: "11546"
+  LAAP_LOG_LEVEL: "info"
+  LAAP_SERVER_RATE_LIMIT: "60"
+  DEEPSEEK_BASE_URL: "https://api.deepseek.com"
+  DEEPSEEK_MODEL: "deepseek-chat"

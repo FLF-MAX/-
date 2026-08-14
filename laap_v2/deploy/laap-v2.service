@@ -1,0 +1,20 @@
+[Unit]
+Description=laap_v2 cognitive runtime
+After=network.target
+
+[Service]
+Type=simple
+User=laap
+Group=laap
+WorkingDirectory=/srv/laap_v2
+EnvironmentFile=-/etc/laap-v2.env
+ExecStart=/usr/bin/python /srv/laap_v2/api_server.py
+Restart=always
+RestartSec=5
+# hardening
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

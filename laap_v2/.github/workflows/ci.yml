@@ -1,0 +1,36 @@
+name: laap_v2 CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'laap_v2/**'
+  pull_request:
+    paths:
+      - 'laap_v2/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        working-directory: laap_v2
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Import checks
+        working-directory: laap_v2
+        run: |
+          python -c "import psi_core_v2, meta_learning_engine, probabilistic_world_model, neural_world_model, hierarchical_memory, drift_aware_meta_learning, deep_analogical_engine, multi_agent_coordination, production_infra, laap_integration, api_server"
+      - name: Benchmarks
+        working-directory: laap_v2
+        run: |
+          python benchmark_suite.py
+      - name: Stress tests
+        working-directory: laap_v2
+        run: |
+          python stress_tests.py

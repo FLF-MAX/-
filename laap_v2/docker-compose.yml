@@ -1,0 +1,20 @@
+services:
+  api:
+    build: .
+    image: laap-v2:latest
+    ports:
+      - "11546:11546"
+    environment:
+      LAAP_HOST: "0.0.0.0"
+      LAAP_PORT: "11546"
+      LAAP_LOG_LEVEL: "info"
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:11546/health/live', timeout=4)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
