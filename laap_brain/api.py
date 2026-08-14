@@ -612,12 +612,18 @@ async def handle_monitor_ui(request):
     return web.Response(text=MONITOR_HTML, content_type="text/html", charset="utf-8")
 
 
+async def handle_v1_root(request):
+    """/v1 API 根 — 与 / 相同的信息页，方便框架 base_url 探测。"""
+    return await handle_root(request)
+
+
 async def handle_root(request):
     return web.json_response({
         "name": "LAAP Brain API",
         "version": "1.0.0",
         "endpoints": {
             "/": "This info",
+            "/v1": "This info (API root)",
             "/v1/models": "List available models",
             "/v1/monitor": "Cognitive state monitor (needs/emotion/routes/events)",
             "/v1/monitor/ui": "Cognitive monitor dashboard (HTML)",
@@ -647,6 +653,7 @@ def create_app() -> web.Application:
     """创建 LAAP Brain API 应用。"""
     app = web.Application()
     app.router.add_get("/", handle_root)
+    app.router.add_get("/v1", handle_v1_root)
     app.router.add_get("/health", handle_health)
     app.router.add_get("/v1/monitor", handle_monitor)
     app.router.add_get("/v1/monitor/ui", handle_monitor_ui)
