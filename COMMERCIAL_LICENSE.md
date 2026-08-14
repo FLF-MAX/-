@@ -10,9 +10,9 @@
 
 本《LAAP 商业授权协议》（以下简称"本协议"）规定被授权方（以下简称"您"或"被授权方"）在获得 LAAP 项目维护者书面授权后，使用、修改、分发 LAAP 商业版代码及相关服务（以下简称"商业版"）的权利与义务。
 
-LAAP 社区版代码以分层许可发布，详见 [LICENSING.md](LICENSING.md)。本协议适用于以下情形：
+LAAP 社区版代码以 **AGPL-3.0** 发布，详见 [LICENSING.md](LICENSING.md)。本协议适用于以下情形：
 
-1. 将 BSL 1.1 层级的核心引擎（`aris_brain/`、`laap/agi/`、`laap_brain/`、`mcp_server/`）用于生产环境；
+1. 将社区版代码（AGPL-3.0）用于生产环境并希望豁免 AGPL 网络服务条款，或进行闭源分发；
 2. 使用 Rust 原生 PSI Core（高性能闭源二进制）；
 3. 使用企业版功能、闭源插件、云服务；
 4. 本协议明确授权的其他内容。
@@ -26,9 +26,9 @@ LAAP 社区版代码以分层许可发布，详见 [LICENSING.md](LICENSING.md)�
 - **LAAP**: Living Agent Application Protocol，数字生命应用协议。
 - **Aris**: LAAP 框架下的默认数字生命体实现。
 - **Compiled AI**: LAAP 项目提出的"编译式 AI"范式及相关方法论。
-- **社区版**: 以分层许可公开发布的 LAAP 参考实现代码，其中 Python PSI Core fallback 采用 Apache 2.0，核心引擎采用 BSL 1.1（非生产使用免费）。
-- **商业版**: 由权利方单独提供、受本协议约束的闭源代码、功能模块、云服务及配套资料，以及 BSL 1.1 层级在生产环境中的使用授权。
-- **BSL 1.1 层级**: 指适用 Business Source License 1.1 的 `aris_brain/`、`laap/agi/`、`laap_brain/`、`mcp_server/` 等核心引擎代码。
+- **社区版**: 以 AGPL-3.0 公开发布的 LAAP 参考实现代码，包含全部仓库代码（`aris_brain/`、`laap/agi/`、`laap_brain/`、`psi_core/`、`mcp_server/` 等）。
+- **商业版**: 由权利方单独提供、受本协议约束的闭源代码、功能模块、云服务及配套资料，以及 AGPL-3.0 代码在生产环境中的闭源使用授权。
+- **AGPL-3.0 代码**: 指适用 GNU Affero General Public License v3.0 的 `aris_brain/`、`laap/agi/`、`laap_brain/`、`psi_core/`、`mcp_server/` 等核心引擎代码。
 - **Rust PSI Core**: 高性能原生认知引擎二进制，以闭源商业授权形式提供。
 - **物种库（Species Library）**: LAAP 框架中用于零 token 代码生成的模板化能力集合。
 - **被授权方**: 与权利方签署本协议并获得商业授权的自然人、法人或其他组织。
@@ -77,7 +77,7 @@ LAAP 社区版代码以分层许可发布，详见 [LICENSING.md](LICENSING.md)�
 ## 6. 知识产权
 
 1. **权利归属**: 商业版及其所有副本、修改、衍生作品的全部知识产权归权利方所有。
-2. **社区版关系**: 被授权方对社区版的使用仍受 Apache 2.0 协议约束，与本协议互不替代。
+2. **社区版关系**: 被授权方对社区版的使用仍受 AGPL-3.0 协议约束，与本协议互不替代。
 3. **反馈与改进**: 被授权方就商业版向权利方提供的建议、反馈或改进方案，权利方有权无偿使用并纳入商业版或社区版，无需向被授权方支付额外费用。
 4. **专利**: 本协议不授予任何明示或暗示的专利许可，除非另有书面约定。
 

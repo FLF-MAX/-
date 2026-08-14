@@ -9,7 +9,8 @@ description = "LAAP — Lifeform Architecture for Autonomous Psyche. A cognitive
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 authors = [{ name = "Lorry Jovens" }]
-license = "BUSL-1.1"
+license = "AGPL-3.0"
+license-files = ["LICENSE"]
 dependencies = [
     # Hermes Agent — the "body" infrastructure (tools, LLM providers, sessions)
     "hermes-agent",

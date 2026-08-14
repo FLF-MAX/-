@@ -10,7 +10,7 @@
 
 LAAP 项目采用 **Open Core** 模式：
 
-- **开源社区版 (`laap-AGI`)**: 保留在公共 GitHub 仓库，Apache 2.0 协议，用于建立标准、吸引开发者、获取生态反馈。
+- **开源社区版 (`laap-AGI`)**: 保留在公共 GitHub 仓库，AGPL-3.0 协议，用于建立标准、吸引开发者、获取生态反馈。
 - **商业闭源版**: 拆分到多个私有仓库，每个仓库职责单一，通过 pip/git 子模块依赖社区版。
 - **核心原则**: 社区版是"心脏参考实现"，商业版是"企业级增强、云服务与行业方案"。
 
@@ -21,7 +21,7 @@ LAAP 项目采用 **Open Core** 模式：
 ```
 lorryjovens-hub (GitHub org)
 │
-├── laap-AGI                    [public]   Apache 2.0 — 社区版
+├── laap-AGI                    [public]   AGPL-3.0 — 社区版
 │   ├── aris_brain/
 │   ├── laap_brain/
 │   ├── psi_core/
@@ -308,7 +308,7 @@ laap-verticals
 
 | 仓库 | 可见性 | 许可证 |
 |---|---|---|
-| laap-AGI | public | Apache 2.0 |
+| laap-AGI | public | AGPL-3.0 |
 | laap-enterprise | private | 商业授权协议 |
 | laap-cloud | private | 商业授权协议 |
 | laap-species-library | private | 商业授权协议 |
