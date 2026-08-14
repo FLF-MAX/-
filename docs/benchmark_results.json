@@ -1,0 +1,28 @@
+[
+  {
+    "timestamp": "2026-08-14 11:41:59",
+    "commit": "188811b",
+    "scores": {
+      "psi_prediction_error_injection": 1.0,
+      "causal_structure_recovery": 1.0,
+      "analogical_structure_mapping": 1.0,
+      "drift_aware_continuous_learning": 0.975,
+      "nonlinear_world_model_mae": 0.9926,
+      "linucb_best_strategy_identification": 0.9333
+    },
+    "mean": 0.9835
+  },
+  {
+    "timestamp": "2026-08-14 11:42:38",
+    "commit": "188811b",
+    "scores": {
+      "psi_prediction_error_injection": 1.0,
+      "causal_structure_recovery": 1.0,
+      "analogical_structure_mapping": 1.0,
+      "drift_aware_continuous_learning": 0.975,
+      "nonlinear_world_model_mae": 0.9926,
+      "linucb_best_strategy_identification": 0.9333
+    },
+    "mean": 0.9835
+  }
+]

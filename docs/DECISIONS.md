@@ -47,8 +47,9 @@
 - **日期**：2026-08-14
 - **代码**：`laap_v2/`（benchmark_suite.py、psi_core_v2.py、k8s/ 等）
 - **为什么**：B1-B5 基准、Docker、K8s 都在这里，但它是**研究孤岛**——不接入 `pytest tests` 主体系。
-- **当前状态**：未合并进主循环。要用基准结果，跑 `laap_v2/tests`。
-- **待办**：未来若 B1-B5 稳定，收敛到 `tests/benchmarks/` 统一跑。
+- **当前状态**：✅ **已收敛**（2026-08-14）。`tests/benchmarks/test_benchmark_suite.py` 直接调用
+  `laap_v2/benchmark_suite.py` 真身，跑 B0-B5 并写入 `docs/benchmark_results.json` 积累数据。
+  首跑 mean=0.9835（commit 188811b）。laap_v2 仍是实现所在，但结果已进主体系。
 
 ## D-008 · 记忆召回 500 条 95ms，线性扫描当前够用
 - **日期**：2026-08-14
