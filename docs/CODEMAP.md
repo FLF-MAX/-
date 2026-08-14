@@ -47,6 +47,8 @@
 | 模块 | 文件 | 用途 |
 |---|---|---|
 | 认知能力基准 | `tests/benchmarks/test_cognitive_benchmarks.py` | PSI 动力学/记忆保真/路由延迟/召回扩展性 |
+| B0-B5 基准收敛 | `tests/benchmarks/test_benchmark_suite.py` | 调 laap_v2 真身，结果→`docs/benchmark_results.json` |
+| 基准趋势图 | `scripts/plot_benchmarks.py` | `plot_benchmarks --detail b1` 看历史演进 |
 | 压力测试 | `tests/test_stress.py` | 并发写入/路由计数原子性/原子写 |
 | 运行时数据隔离 | `tests/conftest.py` | `LAAP_MEMORY_PATH` 指向临时目录 |
 | 架构分层声明 | `docs/ARCHITECTURE_LAYERS.md` | 每层 LLM 依赖状态（诚实标注） |
