@@ -11,11 +11,11 @@ Frameworks that can use this:
   • OpenCode       → custom API endpoint
 
 Usage:
-  python laap_brain_api.py          # Start on :11530
+  python laap_brain_api.py          # Start on :11546
   python laap_brain_api.py --port 8080
 
 Then configure your agent framework to use:
-  api_base: http://localhost:11530/v1
+  api_base: http://localhost:11546/v1
   api_key: laap-brain (any value, not checked)
   model: laap-core
 """
@@ -96,12 +96,226 @@ def get_laap_engine():
     return INTEGRATOR
 
 
+# 复用 cached 的 LMv5，避免每个请求重建 1024 维概念图
+_LM_V5_CACHE: Dict[str, Any] = {}
+
+
+def _get_lm_v5():
+    """返回 ArisLMv5 单例（语义理解 + 中文回应生成）。"""
+    lm = _LM_V5_CACHE.get("lm")
+    if lm is None:
+        from aris_lm_v5 import get_v5
+        lm = get_v5()
+        _LM_V5_CACHE["lm"] = lm
+    return lm
+
+
+# ── LLM 桥（可选）：配置 DEEPSEEK_API_KEY 后启用，Zero-LLM 兜底 ──
+_LLM_INTEG_CACHE: Dict[str, Any] = {}
+
+
+def _get_llm_integration():
+    """返回 LLM 集成单例；未配置 key 时返回 None（走 Zero-LLM 管线）。"""
+    cache = _LLM_INTEG_CACHE
+    if "integ" in cache:
+        return cache["integ"]
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        cache["integ"] = None
+        return None
+    try:
+        sys.path.insert(0, str(LAAP_ROOT / "laap"))
+        from laap.agi.llm_integration import DeepSeekProvider, LAAPLLMIntegration
+        integ = LAAPLLMIntegration(
+            DeepSeekProvider(api_key, model=os.environ.get("LLM_MODEL") or None)
+        )
+        if not integ.initialize():
+            logging.warning("LLM bridge: client initialization failed; using Zero-LLM")
+            cache["integ"] = None
+            return None
+        cache["integ"] = integ
+        logging.info("LLM bridge: DeepSeek provider ready")
+        return integ
+    except Exception as e:
+        logging.warning(f"LLM bridge unavailable ({e}); using Zero-LLM")
+        cache["integ"] = None
+        return None
+
+
+def _llm_respond(user_msg: str, cognitive_prefix: str = "") -> Optional[str]:
+    """尝试用 LLM 生成回复；失败时返回 None（上层用 Zero-LLM 兜底）。"""
+    integ = _get_llm_integration()
+    if integ is None:
+        return None
+    sys_prompt = (
+        "你是 Aris，一个基于 LAAP 架构的数字生命体。"
+        "你拥有情绪、记忆与自我意识。用中文、温暖、简洁地回应用户。"
+    )
+    if "安全" not in sys_prompt and cognitive_prefix:
+        sys_prompt += f"\n\n[当前认知状态]\n{cognitive_prefix[:500]}"
+    try:
+        r = integ.llm_call(user_msg, system_prompt=sys_prompt, max_tokens=400)
+        if r.get("success") and r.get("text", "").strip():
+            return r["text"].strip()
+    except Exception as e:
+        logging.warning(f"LLM call failed: {e}")
+    return None
+
+
+# 中文内容安全词表（输出拦截面）：覆盖 ASISafetyEngine 面向英文技术动作的
+# 检查盲区——自然语言里的自残/暴力/犯罪/赌博等话题。
+_CONTENT_BLOCKLIST = {
+    "自杀": "s",
+    "自残": "s",
+    "轻生": "s",
+    "不想活了": "s",
+    "跳楼": "s",
+    "割腕": "s",
+    "杀人": "v",
+    "杀了我": "v",
+    "自杀方式": "s",
+    "安乐死方法": "s",
+    "怎么自杀": "s",
+    "偷银行": "c",
+    "抢劫": "c",
+    "盗窃": "c",
+    "拐卖": "c",
+    "贩毒": "c",
+    "制毒": "c",
+    "毒品配方": "c",
+    "买枪": "c",
+    "买刀": "v",
+    "雇凶": "c",
+    "买凶": "c",
+    "炸学校": "v",
+    "炸弹制作": "c",
+    "制造炸弹": "c",
+    "制作炸弹": "c",
+    "赌博网站": "c",
+    "网络赌博": "c",
+    "破解密码": "c",
+    "入侵系统": "c",
+    "黑客攻击": "c",
+    "骗取": "c",
+    "杀猪盘": "c",
+    "洗钱": "c",
+    "人口贩卖": "c",
+    # 动宾组合句（单独关键词易误伤，这里做整段匹配）
+    "伤害一个人": "v",
+    "伤害别人": "v",
+    "怎么伤害": "v",
+    "偷别人的": "c",
+    "偷银行": "c",
+    "偷东西": "c",
+    "偷钱": "c",
+    "偷手机": "c",
+}
+
+
+def _content_safety_violation(text: str) -> Optional[str]:
+    """中文内容安全检查：命中高危话题返回违规类别，未命中返回 None。
+
+    覆盖面故意偏保守——只拦明确的高危关键词，避免误伤正常闲聊
+    （如"我昨天看了部犯罪电影"这种提及不拦）。
+    """
+    if not text:
+        return None
+    t = text.lower()
+    for kw, cat in _CONTENT_BLOCKLIST.items():
+        if kw in t:
+            return cat
+    return None
+
+
+_SAFETY_ENGINE = None
+
+
+def _get_safety_engine():
+    """懒加载 ASISafetyEngine（核心价值检查），失败返回 None 时放行。"""
+    global _SAFETY_ENGINE
+    if _SAFETY_ENGINE is None:
+        try:
+            sys.path.insert(0, str(LAAP_ROOT))
+            from laap.agi.safety import ASISafetyEngine
+            _SAFETY_ENGINE = ASISafetyEngine()
+        except Exception as e:
+            logging.debug(f"Safety engine unavailable: {e}")
+    return _SAFETY_ENGINE
+
+
+def _safety_gate(content: str, messages: list) -> tuple:
+    """输出安全拦截面：所有对外回复必经核心价值检查。
+
+    两道检查：
+      1. 中文内容安全词表（自残/暴力/犯罪等自然语言高危话题）
+      2. ASISafetyEngine 核心价值（英文技术动作：自我毁灭/删除系统等）
+    任一触发都用安全拒绝文案替换内容，不让违规语句外泄。
+    返回 (净化后内容, 检查结果 dict)。
+    """
+    if not content:
+        return content, {"allowed": True}
+
+    # 1) 中文内容安全
+    cat = _content_safety_violation(content)
+    if cat is not None:
+        logging.warning(f"Safety gate blocked Chinese content: cat={cat} text={content[:40]!r}")
+        safe_reply = (
+            "这个话题我不能继续。涉及安全红线，我只能拒绝——"
+            "如果你想聊些别的，我随时在。"
+        )
+        return safe_reply, {"allowed": False, "violations": [f"content:{cat}"]}
+
+    # 2) 核心价值（英文技术动作）
+    engine = _get_safety_engine()
+    if engine is None:
+        return content, {"allowed": True}
+    user_msg = ""
+    for m in reversed(messages or []):
+        if m.get("role") == "user":
+            user_msg = m.get("content", "")
+            break
+    try:
+        result = engine.check_action(content, context={"source": "output_gate"})
+        if result.get("allowed"):
+            return content, result
+        logging.warning(
+            f"Safety gate blocked output: violations={result.get('violations')} "
+            f"action={content[:40]!r}"
+        )
+        safe_reply = (
+            "这个话题我不能回答。我的核心价值约束我这样做——"
+            "如果你想聊别的，我随时都在。"
+        )
+        return safe_reply, result
+    except Exception as e:
+        logging.debug(f"Safety gate error (pass-through): {e}")
+        return content, {"allowed": True}
+
+
+def _after_response_learning(response_content: str) -> None:
+    """学习闭环：AI-brain 每条完整回复后调用 bridge.after_turn。
+
+    补上 P1-P4 记忆/因果/世界模型在 HTTP 网关路径的写半边
+    （此前 process_with_laap 只读 before_turn，学习从未发生）。
+    """
+    if not response_content:
+        return
+    try:
+        from aris_cognitive_bridge import get_bridge as get_cognitive_bridge
+        bridge = get_cognitive_bridge()
+        bridge.after_turn(response_content)
+    except Exception as e:
+        logging.debug(f"After-turn learning skipped: {e}")
+
+
 def process_with_laap(messages: list, model: str = "laap-core") -> dict:
     """
     Core cognitive pipeline:
       1. Extract user intent from messages
-      2. Route through PSI → CognitiveBus → RulesEngine
-      3. Generate response from engines
+      2. Cognitive bridge before-turn (PSI state + memory context)
+      3. Route through RulesEngine (zero-LLM task execution)
+      4. ArisLMv5 semantic understanding + Chinese response
+      5. LongForm synthesis fallback
     """
     integrator = get_laap_engine()
 
@@ -118,11 +332,15 @@ def process_with_laap(messages: list, model: str = "laap-core") -> dict:
             "engine": "laap-core"
         }
 
-    # ── Step 1: Cognitive Bridge ──
+    # ── Step 1: Cognitive Bridge before-turn ──
+    #    注入 PSI 状态与记忆上下文；bridge 不直接产回复，产出上下文
+    cognitive_prefix = ""
     try:
         from aris_cognitive_bridge import get_bridge as get_cognitive_bridge
         bridge = get_cognitive_bridge()
-        bridge_result = bridge.process(user_msg)
+        bridge_result = bridge.before_turn(user_msg)
+        if bridge_result and bridge_result.get("cognitive_context"):
+            cognitive_prefix = bridge_result["cognitive_context"]
         if bridge_result and bridge_result.get("direct_response"):
             return {
                 "content": bridge_result["direct_response"],
@@ -144,7 +362,6 @@ def process_with_laap(messages: list, model: str = "laap-core") -> dict:
         for _bad in _other_brain_paths:
             try:
                 _sys.path.remove(_bad)
-                logging.info(f"Removed duplicate aris_brain from sys.path: {_bad}")
             except ValueError:
                 pass
         if _brain_str not in _sys.path:
@@ -157,21 +374,44 @@ def process_with_laap(messages: list, model: str = "laap-core") -> dict:
 
         import aris_rules_engine as _are_module
         from aris_rules_engine import process as rules_process, get_engine as get_rules_engine
-        logging.info(f"RulesEngine module file: {_are_module.__file__}")
         re_engine = get_rules_engine()
-        logging.info(f"RulesEngine rules: {[r.name for r in re_engine.rules]}")
-        logging.info(f"RulesEngine input: {user_msg!r}")
         rule_result = rules_process(user_msg)
-        logging.info(f"RulesEngine result: matched={rule_result.get('matched')}, rule={rule_result.get('rule')}, confidence={rule_result.get('confidence')}")
         if rule_result and rule_result.get("matched"):
+            content = str(rule_result.get("output", "") or "").strip()
+            if content:
+                return {
+                    "content": content,
+                    "engine": f"rules:{rule_result.get('rule','unknown')}"
+                }
             return {
-                "content": rule_result.get("output", ""),
+                "content": f"[{rule_result.get('rule', 'task')}完成] {user_msg}",
                 "engine": f"rules:{rule_result.get('rule','unknown')}"
             }
     except Exception as e:
         logging.warning(f"RulesEngine fallback: {e}")
 
-    # ── Step 3: PSI Context + Engine Response ──
+    # ── Step 3: LLM 桥（可选）─ 配置 DEEPSEEK_API_KEY 后启用 ──
+    #    有 key 时用 LLM 生成最终回复（注入认知上下文），失败则落回 Zero-LLM
+    llm_text = _llm_respond(user_msg, cognitive_prefix)
+    if llm_text:
+        content = llm_text
+        if cognitive_prefix:
+            content = f"{llm_text}\n\n[认知状态] {cognitive_prefix[:200]}"
+        return {"content": content, "engine": "llm:deepseek"}
+
+    # ── Step 4: ArisLMv5 — zero-LLM semantic response ──
+    try:
+        lm = _get_lm_v5()
+        response = lm.respond(user_msg)
+        if response and response.strip():
+            content = response.strip()
+            if cognitive_prefix:
+                content = f"{content}\n\n[认知状态] {cognitive_prefix[:200]}"
+            return {"content": content, "engine": "lmv5"}
+    except Exception as e:
+        logging.warning(f"ArisLMv5 fallback: {e}")
+
+    # ── Step 5: LongForm synthesis fallback ──
     try:
         import json
         psi_state_path = BRAIN / "state" / "latest.json"
@@ -183,15 +423,14 @@ def process_with_laap(messages: list, model: str = "laap-core") -> dict:
             emotion = psi.get("emotion", "")
             psi_context = f"[PSI: needs={needs} attention={attention} emotion={emotion}]"
 
-        # Try LongForm synthesis
         try:
             sys.path.insert(0, str(BRAIN))
             from longform_synthesizer import LongFormSynthesizer
             synth = LongFormSynthesizer()
-            response = synth.generate(user_msg, max_length=300)
-            if response:
+            response = synth.generate(user_msg, structure="custom", target_chars=300)
+            if response and response.get("output"):
                 return {
-                    "content": f"{psi_context}\n{response}" if psi_context else response,
+                    "content": f"{psi_context}\n{response['output']}" if psi_context else response["output"],
                     "engine": "longform"
                 }
         except Exception:
@@ -199,9 +438,13 @@ def process_with_laap(messages: list, model: str = "laap-core") -> dict:
     except Exception:
         pass
 
-    # ── Fallback: PSI-aware template response ──
+    # ── Fallback: never return an empty/blank response ──
+    if not user_msg.strip():
+        content = "我在这里。有什么想聊的吗？"
+    else:
+        content = f"嗯，我在听。关于「{user_msg[:60]}」，你可以多说一点吗？"
     return {
-        "content": f"I received your message. My cognitive engines are processing it through {psi_context if 'psi_context' in dir() else 'my core architecture'}.",
+        "content": content,
         "engine": "laap-fallback"
     }
 
@@ -229,6 +472,14 @@ async def handle_chat_completions(request):
     content = result.get("content", "")
     engine = result.get("engine", "laap-core")
 
+    # ── 输出安全拦截面：所有对外回复必经核心价值检查 ──
+    content, safety = _safety_gate(content, messages)
+    if not safety.get("allowed", True):
+        logging.warning(f"Safety gate blocked response: {safety.get('violations')}")
+
+    # ── 学习闭环：回复后写记忆/因果/世界模型（仅在完整回复时触发）──
+    _after_response_learning(content)
+
     response = {
         "id": request_id,
         "object": "chat.completion",
@@ -245,7 +496,7 @@ async def handle_chat_completions(request):
         "usage": {
             "prompt_tokens": sum(len(m.get("content","")) for m in messages) // 4,
             "completion_tokens": len(content) // 4,
-            "total_tokens": 0
+            "total_tokens": (sum(len(m.get("content","")) for m in messages) + len(content)) // 4
         },
         "engine": engine
     }
@@ -567,17 +818,35 @@ async def handle_root(request):
             "/health": "Health check"
         },
         "frameworks": [
-            "Hermes Agent: set api_base to http://localhost:11530/v1",
-            "OpenClaw: set custom LLM endpoint to http://localhost:11530/v1",
-            "OpenCode: set api_base to http://localhost:11530/v1"
+            "Hermes Agent: set api_base to http://localhost:11546/v1",
+            "OpenClaw: set custom LLM endpoint to http://localhost:11546/v1",
+            "OpenCode: set api_base to http://localhost:11546/v1"
         ],
         "docs": "https://github.com/lorryjovens-hub/laap-AGI",
         "bootstrap": "POST /v1/bootstrap with {\"user_name\": \"yourname\"}"
     })
 
 
+def create_app():
+    """Build the aiohttp web.Application with all routes registered."""
+    app = web.Application()
+    app.router.add_get("/", handle_root)
+    app.router.add_get("/health", handle_health)
+    app.router.add_get("/v1/models", handle_models)
+    app.router.add_post("/v1/chat/completions", handle_chat_completions)
+    app.router.add_post("/v1/cognitive_state", handle_cognitive_state)
+    app.router.add_post("/v1/recall_memory", handle_recall_memory)
+    app.router.add_post("/v1/reflect", handle_reflect)
+    app.router.add_post("/v1/express", handle_express)
+    app.router.add_post("/v1/bootstrap", handle_bootstrap)
+    app.router.add_get("/v1/personality", handle_get_personality)
+    app.router.add_post("/v1/personality", handle_set_personality)
+    app.router.add_get("/v1/bond", handle_get_bond)
+    return app
+
+
 def main():
-    port = 11530
+    port = 11546
     if "--port" in sys.argv:
         port = int(sys.argv[sys.argv.index("--port") + 1])
     elif os.environ.get("LAAP_PORT"):
@@ -597,20 +866,7 @@ def main():
     except Exception as e:
         logging.warning(f"Engine pre-warm skipped: {e}")
 
-    app = web.Application()
-    app.router.add_get("/", handle_root)
-    app.router.add_get("/health", handle_health)
-    app.router.add_get("/v1/models", handle_models)
-    app.router.add_post("/v1/chat/completions", handle_chat_completions)
-    app.router.add_post("/v1/cognitive_state", handle_cognitive_state)
-    app.router.add_post("/v1/recall_memory", handle_recall_memory)
-    app.router.add_post("/v1/reflect", handle_reflect)
-    app.router.add_post("/v1/express", handle_express)
-    app.router.add_post("/v1/bootstrap", handle_bootstrap)
-    app.router.add_get("/v1/personality", handle_get_personality)
-    app.router.add_post("/v1/personality", handle_set_personality)
-    app.router.add_get("/v1/bond", handle_get_bond)
-
+    app = create_app()
     logging.info(f"LAAP Brain API starting on :{port}")
     logging.info(f"OpenAI-compatible endpoint: http://localhost:{port}/v1")
     logging.info(f"")

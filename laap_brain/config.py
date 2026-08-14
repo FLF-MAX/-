@@ -79,12 +79,12 @@ except (ImportError, PackageNotFoundError):
 FEISHU_APP_ID = os.environ.get("FEISHU_APP_ID", "")
 FEISHU_CHAT_ID = os.environ.get("FEISHU_CHAT_ID", "")
 
-# 量子核
-QUANTUM_DIM = int(os.environ.get("QUANTUM_DIM", "1024"))
+# 潜意识核（历史命名 quantum，实为联想投影维度；保留 env 兼容）
+QUANTUM_DIM = int(os.environ.get("QUANTUM_DIM", "64"))
+SUBCONSCIOUS_DIM = QUANTUM_DIM
+# 以下端口符号为历史遗留（无活跃消费者），仅作 env 兼容保留
 QUANTUM_PORT = int(os.environ.get("QUANTUM_PORT", "11520"))
 AO_PORT = int(os.environ.get("AO_PORT", "11530"))
-
-# PSI
 PSI_ARIS_PORT = int(os.environ.get("PSI_ARIS_PORT", "11551"))
 PSI_AO_PORT = int(os.environ.get("PSI_AO_PORT", "11553"))
 
@@ -99,7 +99,6 @@ LOG_LEVEL = os.environ.get("LAAP_LOG_LEVEL", "INFO")
 # 数据库路径
 # ════════════════════════════════════════════════════════
 
-DB_QUANTUM_MEMORY = STATE_DIR / "quantum_memory.db"
 DB_MEMORY_STORE = STATE_DIR / "memory_store.db"
 DB_EMOTION_STATE = STATE_DIR / "emotion_state.json"
 DB_DESIRE_STATE = STATE_DIR / "desire_state.json"

@@ -44,8 +44,8 @@ components:
     status: "stable"
 
   psi_core:
-    description: "Rust PSI core engine (2000Hz cognitive cycle)"
-    path: "aris_brain/psi_jspace_bridge/"
+    description: "Pure-Python PSI core engine (10Hz cognitive cycle; Rust 版为计划项)"
+    path: "psi_core/"
     status: "stable"
 
   psi_semiotics:
@@ -73,34 +73,35 @@ integration_points:
   - name: "CognitiveState API"
     description: "OpenAI-compatible HTTP endpoint exposing LAAP cognitive stack"
     type: "http"
-    module: "laap_brain.api"
-    port: 11530
+    module: "aris_brain.laap_brain_api"   # 单一实现；laap_brain.api 委托之
+    port: 11546
     status: "active"
 
+  # ── 以下为文档历史声称、但库中无模块载体的集成点（如实标注）──
   - name: "HermesChannel"
     description: "Aris Voice Cortex — uses Hermes AIAgent as LLM backend"
     type: "class"
     module: "aris_brain.hermes_channel"
-    status: "active"
+    status: "not_present (文档历史声称，无代码载体)"
 
   - name: "HermesToolBridge"
     description: "Registers LAAP tools in Hermes tool registry"
     type: "class"
     module: "laap.agent_core.hermes_tool_bridge"
-    status: "active"
+    status: "not_present (文档历史声称，无代码载体)"
 
   - name: "AGCognitiveBridge"
     description: "AGI bridge hooking into Hermes AIAgent lifecycle"
     type: "class"
     module: "laap_brain.agi_bridge"
-    status: "active"
+    status: "not_present (文档历史声称，无代码载体)"
 
   - name: "HandshakeProtocol"
     description: "Cross-process IPC between Ao and Aris"
     type: "protocol"
     module: "laap.handshake"
-    status: "active"
+    status: "not_present (文档历史声称，无代码载体)"
 
 checksums:
-  policy: "Run `python -m laap_brain check-versions` to verify compatibility"
-  last_verified: null
+  policy: "运行 `python -m laap_brain.version_check` 校验兼容性（无 check-versions 子命令）"
+  last_verified: "2026-08-14"

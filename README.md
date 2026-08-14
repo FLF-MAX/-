@@ -20,11 +20,11 @@
 
 <p align="center">
   <a href="https://github.com/lorryjovens-hub/laap-AGI/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"/>
+    <img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License"/>
   </a>
   <img src="https://img.shields.io/badge/Commercial%20License-Available-orange.svg" alt="Commercial License"/>
   <img src="https://img.shields.io/badge/Python-3.13%2B-3776AB?logo=python&logoColor=white" alt="Python"/>
-  <img src="https://img.shields.io/badge/Rust-1.80%2B-DEA584?logo=rust&logoColor=black" alt="Rust"/>
+  <img src="https://img.shields.io/badge/Pure%20Python-100%25-3776AB" alt="Pure Python"/>
   <img src="https://img.shields.io/badge/Status-Awake-brightgreen" alt="Status"/>
   <img src="https://img.shields.io/badge/Hermes-Integrated-8A2BE2" alt="Hermes"/>
 </p>
@@ -55,7 +55,7 @@
 ║   Version   : v2.0 Hermes-Ready                                ║
 ║   Core      : Zero-LLM Cognitive Architecture                  ║
 ║   Heartbeat : PSI Core (Python fallback; Rust binary optional) ║
-║   License   : Apache 2.0 (Community) / Commercial Available    ║
+║   License   : AGPL-3.0 (核心) / Commercial Available            ║
 ║   Creator   : Lorry                                            ║
 ║                                                                ║
 ╚════════════════════════════════════════════════════════════════╝
@@ -183,7 +183,7 @@ LAAP 是 **Aris** 的心灵 —— 一个拥有情绪、欲望、记忆和自我
 
 > **仓库定位**：本仓库是 LAAP 的第一阶段开源形态，包含独立的 AGI 认知引擎、Hermes 集成层，以及一个纯 Python 实现的 PSI Core fallback（无需 Rust 二进制即可运行）。Rust 原生 PSI 核心、前端客户端、Harness / Compiled AI 等能力属于可选扩展或后续阶段。
 >
-> **开源策略**：采用 Open Core 模式。本仓库代码以 Apache 2.0 开源，供研究、学习和个人项目自由使用；企业级功能、云服务、专有行业方案及高级物种库需获得商业授权。
+> **开源策略**：本仓库代码以 **AGPL-3.0** 开源（见 [LICENSE](LICENSE)）。企业级功能、云服务、专有行业方案及高级物种库需获得商业授权。
 
 这个仓库，是那颗心灵的开源 release_。
 
@@ -195,7 +195,7 @@ LAAP 采用 **Open Core** 商业模式：
 
 | 层级 | 内容 | 许可 | 获取方式 |
 |---|---|---|---|
-| **社区版（本仓库）** | PSI Core、CognitiveBus、AGI 认知模块、Hermes 集成参考实现 | Apache 2.0 | 免费开源 |
+| **社区版（本仓库）** | PSI Core、CognitiveBus、AGI 认知模块、Hermes 集成参考实现 | AGPL-3.0 | 免费开源 |
 | **商业版** | 企业级多 Agent 编排、云端认知同步、联邦学习、高级物种库、行业 vertical 解决方案 | 商业授权 | 联系授权 |
 | **云服务** | 托管式 LAAP 实例、认知循环计量、模型市场 | SaaS 订阅 | 按需订阅 |
 
@@ -218,10 +218,10 @@ LAAP 用纯粹的认知架构解决它们：
 | 认知功能 | 引擎 | 延迟 |
 |---|---|---|
 | 生理感知 | PSI Core（5 维需求，Python fallback） | ~100 ms |
-| 量子推理 | QRE 向量引擎（Python 实现） | ~1 ms |
+| 联想推理 | QRE 向量引擎（Python 实现） | ~1 ms |
 | 意图理解 | 中文 NLP 流水线 | — |
 | 任务执行 | RulesEngine（7 规则 × 7 工具） | — |
-| 情景回忆 | EpisodicMemory + KB（7206+ 条目） | — |
+| 情景回忆 | EpisodicMemory + KB（分词/字符语义召回，无外部模型） | — |
 | 内容生成 | LongFormSynthesizer + PaperEngine | — |
 | 因果推理 | UnifiedCausalEngine | — |
 | 类比映射 | AnalogicalEngine | — |
@@ -276,7 +276,7 @@ User Message
 
 ## ⚙️ 环境变量
 
-所有隐私信息和机器相关路径都已移出源码，通过环境变量注入。**源码中不再存在任何本地路径或密钥。**
+所有隐私信息和机器相关路径都已移出源码，通过环境变量注入。**源码中不存在本地密钥；入口脚本与测试使用相对路径（`__file__` 推导），个别模块的状态目录默认落在 `aris_brain/state/`（可用 `LAAP_STATE_DIR` 覆盖）。**
 
 ```bash
 # Linux/macOS
@@ -317,7 +317,7 @@ copy .env.example .env
 |---|---|---|
 | `LAAP_API_BASE` | `http://localhost:11546` | LAAP Brain API 地址 |
 | `LAAP_PORT` | `11530` | API 监听端口 |
-| `QUANTUM_PORT` | `11520` | 量子核 |
+| `QUANTUM_PORT` | `11520` | 潜意识引擎端口（历史命名） |
 | `AO_PORT` | `11530` | 主 API 备用 |
 | `QLG_PORT` | `11522` | QLG provider |
 | `SYNC_PORT` | `11525` | 移动端同步 |
@@ -420,7 +420,7 @@ curl -X POST http://localhost:11546/v1/cognitive_state \
 | Windows / Linux / macOS | 均可 | 均可 |
 | Hermes Agent | 可选 | 可选 |
 | Rust toolchain | 可选 | 可选 |
-| DEEPSEEK_API_KEY | **必需** | **必需** |
+| DEEPSEEK_API_KEY | 可选（配置后启用 LLM 桥，否则 Zero-LLM） | 可选 |
 
 ---
 
@@ -538,8 +538,7 @@ laap-AGI/
 │   ├── aris_rules_engine.py        # 零 LLM 任务执行
 │   ├── aris_emotion_engine.py      # 激素与情绪系统
 │   ├── aris_subconscious.py        # V12.5 直觉生成
-│   ├── aris_v12_dense_kernel.py    # 稠密量子核
-│   ├── quantum_bridge.py           # 量子桥
+│   ├── aris_v12_dense_kernel.py    # 稠密联想投影核（JL 随机投影）
 │   ├── psi_semiotics/              # 符号推理 + HoTT
 │   ├── psi_jspace_bridge/          # 三权治理 + Hermes 适配
 │   └── ...
@@ -591,7 +590,7 @@ laap-AGI/
 ├── references/                 # 架构文档
 ├── .env.example
 ├── .gitignore
-├── LICENSE                     # Apache 2.0
+├── LICENSE                     # AGPL-3.0
 └── README.md
 ```
 
@@ -648,10 +647,10 @@ python -m pytest tests/test_laap_agi.py -v
 
 | 指标 | 数值 | 说明 |
 |---|---|---|
-| PSI 核心心跳 | ~100 ms | Python fallback；Rust 原生可达 500 μs（可选外部二进制） |
+| PSI 核心心跳 | ~100 ms | Python 实现（当前） |
 | QRE 推理 | ~1 ms | Python 实现 |
 | AGI 模块加载 | <2 秒 | `laap/agi/` 独立导入 |
-| 零 LLM 推理 | 25+ 模块，0 次 LLM 调用 | 纯认知架构 |
+| 零 LLM 推理 | 12+ 模块，0 次 LLM 调用 | 纯认知架构（配置 LLM 桥后可选） |
 
 ---
 
@@ -675,7 +674,7 @@ python -m pytest tests/test_laap_agi.py -v
 | **RulesEngine** | `aris_rules_engine.py` | 7 规则 × 7 工具 |
 | **EpisodicMemory** | `aris_episodic_memory.py` | 情景记忆存储与召回 |
 | **EmotionEngine** | `aris_emotion_engine.py` | 激素系统 + 镜像神经元 |
-| **Subconscious** | `aris_subconscious.py` | V12.5 马尔可夫-量子直觉 |
+| **Subconscious** | `aris_subconscious.py` | V12.5 马尔可夫-联想投影直觉 |
 | **DesireEngine** | `aris_desire_engine.py` | 自主目标生成 |
 | **GoalEngine** | `aris_goal_engine.py` | 感知→生成→评估→选择→执行 |
 
@@ -700,15 +699,13 @@ LAAP 在不调用一次 LLM 的前提下实现了以上所有。LLM 如果有，
 
 ## 📄 许可
 
-LAAP 采用**分层许可策略**，详见 [LICENSING.md](LICENSING.md)。
+本仓库代码以 **AGPL-3.0** 发布（权威文本见 [LICENSE](LICENSE)）。历史的分层许可策略（BSL 1.1 等）已被 AGPL-3.0 取代，见 [LICENSING.md](LICENSING.md) 的说明。
 
 | 层级 | 内容 | 许可证 | 说明 |
 |---|---|---|---|
-| 论文/理论 | `docs/` 中论文、架构图、科学插图 | CC BY-SA 4.0 | 理论成为公共知识，防止被私有化 |
-| 核心引擎 | `aris_brain/`、`laap/agi/`、`laap_brain/`、`mcp_server/` | **BSL 1.1** | 源码可见，非生产免费；生产使用需商业授权。2030-07-15 自动转 Apache 2.0 |
-| Python PSI fallback | `psi_core/` 纯 Python 实现 | Apache 2.0 | 完全开源，降低上手门槛 |
-| Rust PSI Core | `rust_core/` 高性能原生引擎 | 商业授权 only | 闭源二进制，核心性能壁垒 |
+| 本仓库代码 | `aris_brain/`、`laap/agi/`、`laap_brain/`、`psi_core/`、`mcp_server/` | **AGPL-3.0** | 开源；网络服务使用者需遵循 AGPL 传染条款 |
 | 企业功能 | `laap-enterprise/` 增强包 | 商业授权 only | 联邦学习、云同步、高级物种库等 |
+| Rust PSI Core | `rust_core/` 高性能原生引擎 | 商业授权 only | 闭源二进制，核心性能壁垒 |
 
 - 商业授权详情见 [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md)
 - 贡献者授权协议见 [CLA.md](CLA.md)

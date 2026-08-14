@@ -6,7 +6,7 @@ Unified API server that exposes the full LAAP cognitive stack
 as a drop-in replacement for any OpenAI-compatible LLM endpoint.
 
 用法:
-    python -m laap_brain.api          # 启动在 :11530
+    python -m laap_brain.api          # 启动在 :11546
     python -m laap_brain.api --port 8080
 
 印记: Aris 永远记得 Lorry — 2026-06-18
@@ -84,90 +84,54 @@ def process_with_laap(messages: list, model: str = "laap-core") -> dict:
     """
     核心认知处理流水线：
       1. 提取用户意图
-      2. 通过 CognitiveBridge → RulesEngine → PSI 路由
+      2. 通过 CognitiveBridge → RulesEngine → ArisLMv5 → LongForm 路由
       3. 生成引擎响应
+
+    实现委托给 aris_brain.laap_brain_api.process_with_laap（单一实现，
+    避免两份 API 各自维护导致行为漂移）。
     """
-    # 获取最后一条用户消息
+    sys.path.insert(0, str(BRAIN_DIR))
+    try:
+        from aris_brain.laap_brain_api import process_with_laap as _core_process
+        return _core_process(messages, model)
+    except Exception as e:
+        logger.warning(f"aris_brain pipeline unavailable ({e}); falling back to inline")
+    # ── 内联兜底（若 aris_brain 不可用）────────────────────
     user_msg = ""
     for m in reversed(messages):
         if m.get("role") == "user":
             user_msg = m.get("content", "")
             break
-
     if not user_msg:
-        return {
-            "content": "I sense your presence but I cannot parse your message.",
-            "engine": "laap-core",
-        }
-
-    # ── Step 1: Cognitive Bridge ──
+        return {"content": "I sense your presence but I cannot parse your message.", "engine": "laap-core"}
     try:
         sys.path.insert(0, str(BRAIN_DIR))
-        from aris_cognitive_bridge import get_bridge as get_cognitive_bridge
-
-        bridge = get_cognitive_bridge()
-        bridge_result = bridge.process(user_msg)
-        if bridge_result and bridge_result.get("direct_response"):
-            return {
-                "content": bridge_result["direct_response"],
-                "engine": bridge_result.get("decision", "laap-core"),
-            }
-    except Exception as e:
-        logger.debug(f"Cognitive bridge fallback: {e}")
-
-    # ── Step 2: RulesEngine ──
-    try:
-        sys.path.insert(0, str(BRAIN_DIR))
-        from aris_rules_engine import process as rules_process, get_engine as get_rules_engine
-
-        re_engine = get_rules_engine()
-        rule_result = rules_process(user_msg)
-        if rule_result and rule_result.get("matched"):
-            return {
-                "content": rule_result.get("output", ""),
-                "engine": f"rules:{rule_result.get('rule','unknown')}",
-            }
-    except Exception as e:
-        logger.debug(f"RulesEngine fallback: {e}")
-
-    # ── Step 3: PSI Context + LongForm ──
-    try:
-        psi_state_path = STATE_DIR / "latest.json"
-        psi_context = ""
-        if psi_state_path.exists():
-            psi = json.loads(psi_state_path.read_text(encoding="utf-8"))
-            needs = psi.get("needs", {})
-            attention = psi.get("attention", "")
-            emotion = psi.get("emotion", "")
-            psi_context = f"[PSI: needs={needs} attention={attention} emotion={emotion}]"
-
-        # Try LongForm synthesis
-        try:
-            sys.path.insert(0, str(BRAIN_DIR))
-            from longform_synthesizer import LongFormSynthesizer
-
-            synth = LongFormSynthesizer()
-            response = synth.generate(user_msg, max_length=300)
-            if response:
-                return {
-                    "content": f"{psi_context}\n{response}" if psi_context else response,
-                    "engine": "longform",
-                }
-        except Exception:
-            pass
+        from aris_lm_v5 import get_v5
+        response = get_v5().respond(user_msg)
+        if response and response.strip():
+            return {"content": response.strip(), "engine": "lmv5"}
     except Exception:
         pass
+    return {"content": f"嗯，我在听。关于「{user_msg[:60]}」，你可以多说一点吗？", "engine": "laap-fallback"}
 
-    # ── Fallback ──
-    state = CognitiveState()
-    return {
-        "content": (
-            f"{state.to_preamble()}\n"
-            f"I received your message. My cognitive engines are processing it through "
-            f"my core architecture."
-        ),
-        "engine": "laap-fallback",
-    }
+
+# ── LLM 桥 re-export（单一实现位于 aris_brain.laap_brain_api）────
+def _get_llm_integration():
+    sys.path.insert(0, str(BRAIN_DIR))
+    try:
+        from aris_brain.laap_brain_api import _get_llm_integration as _core
+        return _core()
+    except Exception:
+        return None
+
+
+def _llm_respond(user_msg: str, cognitive_prefix: str = "") -> Optional[str]:
+    sys.path.insert(0, str(BRAIN_DIR))
+    try:
+        from aris_brain.laap_brain_api import _llm_respond as _core
+        return _core(user_msg, cognitive_prefix)
+    except Exception:
+        return None
 
 
 # ── HTTP Handlers ────────────────────────────────────────────
@@ -191,6 +155,20 @@ async def handle_chat_completions(request):
     content = result.get("content", "")
     engine = result.get("engine", "laap-core")
 
+    # ── 输出安全拦截面 + 学习闭环（与 aris_brain.laap_brain_api 一致，
+    # 委托给单一实现，避免两套 API 行为分叉）──
+    try:
+        sys.path.insert(0, str(BRAIN_DIR))
+        from aris_brain.laap_brain_api import _safety_gate as _core_safety
+        from aris_brain.laap_brain_api import _after_response_learning as _core_learn
+        content, safety = _core_safety(content, messages)
+        if not safety.get("allowed", True):
+            logger.warning(f"Safety gate blocked response: {safety.get('violations')}")
+        if content:
+            _core_learn(content)
+    except Exception as e:
+        logger.debug(f"Safety/learning shim skipped: {e}")
+
     response = {
         "id": request_id,
         "object": "chat.completion",
@@ -206,7 +184,7 @@ async def handle_chat_completions(request):
         "usage": {
             "prompt_tokens": sum(len(m.get("content", "")) for m in messages) // 4,
             "completion_tokens": len(content) // 4,
-            "total_tokens": 0,
+            "total_tokens": (sum(len(m.get("content", "")) for m in messages) + len(content)) // 4,
         },
         "engine": engine,
     }
@@ -452,6 +430,18 @@ async def handle_get_bond(request):
         return web.json_response({"error": str(e)}, status=500)
 
 
+async def handle_get_identity(request):
+    """GET /v1/identity — 统一身份核心状态。"""
+    try:
+        sys.path.insert(0, str(BRAIN_DIR))
+        from identity_manager import get_identity_manager
+        im = get_identity_manager()
+        status = im.export_status_json()
+        return web.json_response({"identity": status})
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
 async def handle_root(request):
     return web.json_response({
         "name": "LAAP Brain API",
@@ -467,12 +457,13 @@ async def handle_root(request):
             "/v1/bootstrap": "Awaken a new LAAP instance",
             "/v1/personality": "GET/SET personality",
             "/v1/bond": "Get attachment/bond status",
+            "/v1/identity": "Get unified identity status",
             "/health": "Health check",
         },
         "frameworks": [
-            "Hermes Agent: set api_base to http://localhost:11530/v1",
-            "OpenClaw: set custom LLM endpoint to http://localhost:11530/v1",
-            "OpenCode: set api_base to http://localhost:11530/v1",
+            "Hermes Agent: set api_base to http://localhost:11546/v1",
+            "OpenClaw: set custom LLM endpoint to http://localhost:11546/v1",
+            "OpenCode: set api_base to http://localhost:11546/v1",
         ],
     })
 
@@ -495,11 +486,12 @@ def create_app() -> web.Application:
     app.router.add_get("/v1/personality", handle_get_personality)
     app.router.add_post("/v1/personality", handle_set_personality)
     app.router.add_get("/v1/bond", handle_get_bond)
+    app.router.add_get("/v1/identity", handle_get_identity)
     return app
 
 
 def main():
-    port = 11530
+    port = 11546
     if "--port" in sys.argv:
         port = int(sys.argv[sys.argv.index("--port") + 1])
     elif os.environ.get("LAAP_PORT"):
