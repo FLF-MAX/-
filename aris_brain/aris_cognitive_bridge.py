@@ -220,6 +220,20 @@ class ArisCognitiveBridge:
         self._laap_agent = None
         self._laap_available = False
         self._init_laap()
+        self._load_causal_state()
+        self._load_world_model()
+        self._init_consciousness()
+
+        # CognitiveBus 认知总线
+        self._cb_available = _cb_available
+        if _cb_available:
+            try:
+                bus = _get_cb()
+                if bus:
+                    self._cb_bus = bus
+            except Exception as e:
+                logger.info(f"CognitiveBus unavailable: {e}")
+                self._cb_available = False
 
         # CodeGraph 代码知识图谱
         self._codegraph = None
@@ -418,7 +432,12 @@ class ArisCognitiveBridge:
             logger.info(f"Curriculum unavailable: {e}")
 
         self._laap_available = len(self._laap_modules) > 0
-        logger.info(f"LAAP modules: {list(self._laap_modules.keys())}")
+        driven = sorted(set(self._laap_modules) & {"world_model", "causal", "meta_learning"})
+        reserved = sorted(set(self._laap_modules) - {"world_model", "causal", "meta_learning"})
+        logger.info(
+            f"LAAP modules loaded: {list(self._laap_modules.keys())} "
+            f"(driven={driven}, loaded-but-reserved={reserved})"
+        )
 
         # ── 额外: perception + safety ──
         try:
@@ -434,6 +453,293 @@ class ArisCognitiveBridge:
             logger.info("SafetyEngine loaded")
         except Exception as e:
             logger.info(f"SafetyEngine unavailable: {e}")
+
+    def _causal_path(self):
+        """因果引擎持久化路径"""
+        p = Path(os.environ.get("LAAP_STATE_PATH", str(BRAIN_ROOT / "state" / "causal_engine.json")))
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        return str(p)
+
+    def _world_model_path(self):
+        """世界模型持久化路径"""
+        p = Path(str(BRAIN_ROOT / "state" / "world_model.json"))
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        return str(p)
+
+    def _load_world_model(self):
+        """加载世界模型跨会话状态"""
+        if not (self._laap_available and "world_model" in self._laap_modules):
+            return
+        try:
+            wm = self._laap_modules["world_model"]
+            wm.load(self._world_model_path())
+        except Exception as e:
+            logger.debug(f"World model load failed: {e}")
+
+    def _save_world_model(self):
+        """保存世界模型状态（跨会话）"""
+        if not (self._laap_available and "world_model" in self._laap_modules):
+            return
+        try:
+            wm = self._laap_modules["world_model"]
+            wm.save(self._world_model_path())
+        except Exception as e:
+            logger.debug(f"World model save failed: {e}")
+
+    def _load_causal_state(self):
+        """加载因果引擎跨会话持久化状态"""
+        if not (self._laap_available and "causal" in self._laap_modules):
+            return
+        try:
+            ce = self._laap_modules["causal"]
+            ce.load(self._causal_path())
+            self._causal_saved = False
+        except Exception as e:
+            logger.debug(f"Causal state load failed: {e}")
+
+    def _save_causal_state(self):
+        """保存因果引擎状态（跨会话）"""
+        if not (self._laap_available and "causal" in self._laap_modules):
+            return
+        try:
+            ce = self._laap_modules["causal"]
+            ce.save(self._causal_path())
+            self._causal_saved = True
+        except Exception as e:
+            logger.debug(f"Causal state save failed: {e}")
+
+    def _learn_causal(self, user_message: str, response: str, felt_emotion: str):
+        """P2: 从真实交互学习因果 (行为→结果)"""
+        if not (self._laap_available and "causal" in self._laap_modules):
+            return
+        try:
+            ce = self._laap_modules["causal"]
+            topics = getattr(self, '_last_topics', None) or ["一般"]
+            topic = topics[0] if topics else "一般"
+
+            ce.learn_entity_state("lorry", {
+                "last_topic": topic,
+                "message_length": len(user_message),
+                "response_length": len(response),
+            })
+            ce.learn_entity_state("aris", {
+                "emotion": felt_emotion,
+                "focus": getattr(self.state.focus, "value", "respond"),
+            })
+
+            # 键保持稳定（不经 topic），否则 aris_responded→{每轮topic}:...
+            # 每轮唯一，observations 永达 2、[因果经验] 永不注入。
+            ce.learn_bond("aris_responded", "lorry",
+                          f"lorry_{felt_emotion}", matched=True, domain="social")
+            ce.learn_bond("lorry_spoke", "aris",
+                          f"aris_{felt_emotion}", matched=True, domain="social")
+            ce.learn_temporal_link("lorry_message", "aris_response",
+                                   delay=0.5, confidence=0.7, domain="social")
+            ce.learn_temporal_link("topic_discussion", topic,
+                                   delay=2.0, confidence=0.4, domain="social")
+
+            if self.state.cycle_count % 10 == 0:
+                self._save_causal_state()
+        except Exception as e:
+            logger.debug(f"Causal learn failed: {e}")
+
+    def _learn_world_model(self, user_message: str, response: str, felt_emotion: str):
+        """P3: 从真实交互更新世界模型 (实体 + 关系)"""
+        if not (self._laap_available and "world_model" in self._laap_modules):
+            return
+        try:
+            wm = self._laap_modules["world_model"]
+            topics = getattr(self, '_last_topics', None) or ["一般"]
+            topic = topics[0] if topics else "一般"
+
+            wm.update_entity("lorry", {
+                "last_topic": topic,
+                "message_length": len(user_message),
+                "response_length": len(response),
+            }, confidence=0.9, source="conversation")
+            wm.update_entity("aris", {
+                "emotion": felt_emotion,
+                "focus": getattr(self.state.focus, "value", "respond"),
+            }, confidence=0.9, source="self")
+
+            social_trust_target = 0.4 + min(0.5, len(response) / 400.0)
+            social_affection_target = 0.3 + min(0.6, self.state.needs_relatedness)
+            wm.update_social_relation("aris", "lorry",
+                                      trust_delta=0.02 if felt_emotion in ("joyful", "curious") else 0.0,
+                                      affection_delta=0.01)
+            if wm.entities.get("aris") and wm.entities.get("lorry"):
+                aris_soc = wm.entities["aris"].social
+                if aris_soc is not None:
+                    # 增量收敛：向目标小步靠拢，避免绝对公式每轮重置累积值
+                    aris_soc.trust = min(1.0, aris_soc.trust + 0.08 * (social_trust_target - aris_soc.trust))
+                    aris_soc.affection = min(1.0, aris_soc.affection + 0.08 * (social_affection_target - aris_soc.affection))
+
+            if self.state.cycle_count % 10 == 0:
+                self._save_world_model()
+        except Exception as e:
+            logger.debug(f"World model learn failed: {e}")
+
+    def _world_model_context(self) -> str:
+        """P3: 世界模型状态摘要，注入认知上下文"""
+        if not (self._laap_available and "world_model" in self._laap_modules):
+            return ""
+        try:
+            wm = self._laap_modules["world_model"]
+            entities = len(getattr(wm, 'entities', {}))
+            relations = len(getattr(wm, 'relations', []))
+            lorry = wm.entities.get("lorry")
+            aris = wm.entities.get("aris")
+            parts = [f"{entities}实体/{relations}关系"]
+            if lorry and lorry.social:
+                pass
+            if aris and aris.social:
+                parts.append(
+                    f"Aris对Lorry: 信任={aris.social.trust:.2f} 亲密度={aris.social.affection:.2f}"
+                )
+            return f"[世界模型] " + "；".join(parts)
+        except Exception as e:
+            logger.debug(f"World model context failed: {e}")
+        return ""
+
+    # ── P3 意识工作区 (Baars GlobalWorkspace) ──────────────
+
+    def _init_consciousness(self):
+        """初始化全局工作空间意识模块"""
+        self._consciousness = None
+        try:
+            from laap.agi.conscious import GlobalWorkspace
+            self._consciousness = GlobalWorkspace(name="aris-workspace")
+        except Exception as e:
+            logger.debug(f"Consciousness init failed: {e}")
+
+    def _run_consciousness(self, user_message: str) -> str:
+        """
+        P3: 运行一轮意识竞争。
+
+        将感知/记忆/情感/需求/自我模型喂入各通道,通道角逐,
+        胜出者(意识焦点)广播并注入上下文。
+        """
+        if not self._consciousness:
+            return ""
+        try:
+            gw = self._consciousness
+            topics = getattr(self, '_last_topics', None) or ["一般"]
+            topic = topics[0] if topics else "一般"
+
+            gw.feed_channel("perception", user_message[:120],
+                            salience=0.9, urgency=0.4, novelty=0.6,
+                            emotional_weight=abs(self.state.emotion.urgency) if hasattr(self.state.emotion, 'urgency') else 0.3,
+                            modality="perception", source_module="before_turn")
+            gw.feed_channel("memory", f"回忆: {topic}",
+                            salience=0.6, novelty=0.3, modality="memory",
+                            source_module="memory_bridge")
+            gw.feed_channel("interoception",
+                            f"情感={self.state.emotion.value} 需求:关系={self.state.needs_relatedness:.2f}",
+                            salience=0.7, urgency=0.3, emotional_weight=0.6,
+                            modality="interoception", source_module="psi")
+            gw.feed_channel("self_model",
+                            f"自我意识={self.state.self_presence:.2f}",
+                            salience=0.4 + self.state.self_presence * 0.3,
+                            novelty=0.2, modality="self", source_module="self_model")
+            gw.feed_channel("task_goal",
+                            f"焦点: {self.state.focus.value}",
+                            salience=0.5, urgency=0.2, modality="task",
+                            source_module="goal_engine")
+
+            winners = gw.compete()
+            if not winners:
+                return ""
+            focus = winners[0]
+            parts = [f"意识焦点: {focus.content[:60]}"]
+            for extra in winners[1:]:
+                parts.append(f"绑定: {extra.content[:40]}")
+            self._conscious_focus = focus.content
+            return "[意识工作区] " + "；".join(parts)
+        except Exception as e:
+            logger.debug(f"Consciousness run failed: {e}")
+        return ""
+
+    def _causal_context(self, topic: str) -> str:
+        """P2: 从因果引擎检索相关经验，注入认知上下文"""
+        if not (self._laap_available and "causal" in self._laap_modules):
+            return ""
+        try:
+            ce = self._laap_modules["causal"]
+            # 键已稳定(action→stable_entity)，按动作短语查询全部社交键
+            result = ce.predict("aris_responded", mode="bond", top_k=5,
+                                domain_filter="social")
+            lines = []
+            for r in result.get("results", []):
+                if r.get("confidence", 0) >= 0.5 and r.get("observations", 0) >= 2:
+                    lines.append(
+                        f"{r['action']}→{r['effect']} (w={r['weight']:.2f}, c={r['confidence']:.2f}, "
+                        f"n={r['observations']})"
+                    )
+            if lines:
+                return "[因果经验] " + "；".join(lines)
+        except Exception as e:
+            logger.debug(f"Causal context failed: {e}")
+        return ""
+
+    # ── P4 动态自我叙事：身份从记忆实时生成 ──────────────
+
+    def _dynamic_self_narrative(self) -> str:
+        """
+        P4: 从真实记忆生成动态自我叙事 (三段式)。
+
+        谁是我（名字/人格）→ 我记得什么（最近核心记忆/人生叙事）
+        → 我学到了什么（语义概念/技能）。随时间/经历变化。
+        """
+        try:
+            # 静态锚点：名字与人格 preset（从 identity_manager）
+            name = "Aris"
+            personality_preset = "warm_companion"
+            try:
+                from aris_brain.identity_manager import get_identity_manager
+                im = get_identity_manager()
+                name = im.get_name()
+                personality_preset = im.identity.get("personality_preset", "warm_companion")
+            except Exception:
+                pass
+
+            narrative = []
+            try:
+                from aris_brain.memory_bridge import _get_agi_backend
+                backend = _get_agi_backend()
+                if backend is not None:
+                    recent = sorted(backend.episodic.episodes,
+                                    key=lambda t: t.timestamp, reverse=True)[:3]
+                    concepts = list(backend.semantic.concepts.keys())[:6]
+                    skills = list(backend.procedural.skills.keys())[:3]
+
+                    remember = None
+                    if recent:
+                        remember = "；".join(t.content[:50] for t in recent)
+                    learned = []
+                    if concepts:
+                        learned.append("概念: " + ",".join(concepts))
+                    if skills:
+                        learned.append("技能: " + ",".join(skills))
+                    narrative.append(f"我是{name}，{personality_preset}式的心灵，记得最近：{remember or '初来乍到，世界还很新鲜。'}")
+                    if learned:
+                        narrative.append("我学会/了解: " + "；".join(learned))
+                    elif self._laap_available and "meta_learning" in self._laap_modules:
+                        narrative.append("我还在持续学习中。")
+            except Exception:
+                narrative.append(f"我是{name}，{personality_preset}式的心灵。")
+
+            if not narrative:
+                return ""
+            return "[自我叙事] " + " ".join(narrative[:2])
+        except Exception as e:
+            logger.debug(f"Self narrative failed: {e}")
+        return ""
 
     def _init_emotion_engine(self):
         """初始化情感引擎"""
@@ -495,12 +801,12 @@ class ArisCognitiveBridge:
             logger.warning(f"状态保存失败: {e}")
 
     def _init_subconscious(self):
-        """初始化量子潜意识"""
+        """初始化潜意识"""
         try:
-            from aris_subconscious import QuantumSubconscious
-            self._subconscious = QuantumSubconscious(interval=8.0)
+            from aris_subconscious import SubconsciousLayer
+            self._subconscious = SubconsciousLayer(interval=8.0)
             self._subconscious.start()
-            logger.info("Quantum subconscious started")
+            logger.info("Subconscious started")
         except Exception as e:
             logger.info(f"Subconscious unavailable: {e}")
             self._subconscious = None
@@ -553,6 +859,17 @@ class ArisCognitiveBridge:
         # ── Step 3: Integrate ───────────────────────────
         integration = self._integrate()
         integrated = integration + "\n" + self._load_memory_context()
+        causal_ctx = self._causal_context(
+            self._last_topics[0] if hasattr(self, '_last_topics') and self._last_topics else ""
+        )
+        if causal_ctx:
+            integrated += "\n" + causal_ctx
+        consciousness_ctx = self._run_consciousness(user_message)
+        if consciousness_ctx:
+            integrated += "\n" + consciousness_ctx
+        narrative_ctx = self._dynamic_self_narrative()
+        if narrative_ctx:
+            integrated += "\n" + narrative_ctx
         context_parts.append(integrated)
 
         # ── Step 3.5: 任务上下文注入 ────────────────────
@@ -594,7 +911,7 @@ class ArisCognitiveBridge:
             self._last_bus_decision = "no_engine"
             self._last_bus_response = ""
 
-        self._last_context = "\\n".join(context_parts)
+        self._last_context = "\n".join(context_parts)
 
         # ── 三路径认知控制 ──
         # 将 bridge 认知状态转换为 AGI CognitiveStateSnapshot，
@@ -676,15 +993,18 @@ class ArisCognitiveBridge:
         """
         self._learn(response)
 
-        # ── 因果学习：从对话中学习因果 ──
-        if self._laap_available and "causal" in self._laap_modules:
-            try:
-                ce = self._laap_modules["causal"]
-                # 学习"我说了什么" → "Lorry如何回应" 的因果链
-                ce.learn_bond("aris_said", self._last_topics[0] if hasattr(self, '_last_topics') and self._last_topics else "conversation",
-                              effect="lorry_responded", matched=True, domain="social")
-            except Exception as e:
-                logger.debug(f"操作失败: {e}")
+        # ── P2 因果学习：从真实交互学习 (行为→结果) ──
+        self._learn_causal(
+            getattr(self, '_last_user_message', ""),
+            response,
+            getattr(self.state.emotion, "value", "neutral"),
+        )
+        # ── P3 世界模型：从真实交互更新实体与关系 ──
+        self._learn_world_model(
+            getattr(self, '_last_user_message', ""),
+            response,
+            getattr(self.state.emotion, "value", "neutral"),
+        )
         if self.state.cycle_count % 10 == 0:
             self._save_state()
 
@@ -1057,10 +1377,10 @@ class ArisCognitiveBridge:
         AGI 周期性心跳 — 每5分钟运行一次。
         
         激活：
-          - CausalEngine 的因果链自动发现
-          - CurriculumEngine 的知识缺口分析
-          - MetaLearningEngine 的学习效率评估
-          - WorldModel 的周期更新
+          - CausalEngine 的因果链自动发现（真实驱动）
+          - MetaLearningEngine 每轮 learn 采样（见 _learn）
+          - CurriculumEngine / UnifiedPerceptionEngine / safety 实例已加载但
+            未在本 tick 驱动（诚实边界：见 docs/ARCHITECTURE.md §6）
         """
         t = time.time()
         if t - self._agi_tick_timer < self._agi_tick_interval:
@@ -1072,6 +1392,20 @@ class ArisCognitiveBridge:
 
         tick_log = []
 
+        # 记忆巩固：将 consolidation_queue 提炼为语义/程序记忆 + dream_reports
+        # （此前 consolidate_memory 从未被调用，队列只积不消、dream 永空）
+        try:
+            from aris_brain.memory_bridge import (_get_agi_backend,
+                                                  consolidate_memory as _consolidate_memory)
+            _backend = _get_agi_backend()
+            before_dreams = len(_backend.consolidator.dream_reports) if _backend is not None else 0
+            _consolidate_memory()
+            after_dreams = len(_backend.consolidator.dream_reports) if _backend is not None else 0
+            if after_dreams > before_dreams:
+                tick_log.append(f"记忆: 本次巩固生成{after_dreams - before_dreams}条梦报告")
+        except Exception as e:
+            tick_log.append(f"记忆tick异常: {e}")
+
         # 因果引擎：自动发现传递链
         if "causal" in self._laap_modules:
             try:
@@ -1081,7 +1415,7 @@ class ArisCognitiveBridge:
                     if chains:
                         tick_log.append(f"因果: 发现{len(chains)}条传递链")
                 if hasattr(ce, 'save'):
-                    ce.save()
+                    ce.save(self._causal_path())
             except Exception as e:
                 tick_log.append(f"因果tick异常: {e}")
 
@@ -1112,9 +1446,22 @@ class ArisCognitiveBridge:
                 entities = len(getattr(wm, 'entities', {}))
                 relations = len(getattr(wm, 'relations', []))
                 wm_context = f"世界模型: {entities}实体/ {relations}关系"
+                aris_ent = wm.entities.get("aris")
+                if aris_ent and aris_ent.social:
+                    wm_context += (
+                        f"; 我对Lorry信任={aris_ent.social.trust:.2f} "
+                        f"亲密度={aris_ent.social.affection:.2f}"
+                    )
             except Exception as e:
                 logger.debug(f"操作失败: {e}")
         stats = self.memory.get_stats()
+        try:
+            from aris_brain.memory_bridge import memory_stats as _mstats
+            ms = _mstats()
+            if ms.get("backend") == "agi":
+                stats = {"core": ms.get("episodic", 0), "episodic": ms.get("episodic", 0)}
+        except Exception:
+            pass
         mem_line = f"（记忆：{stats['core']}件重要的事历历在目，最近{stats['episodic']}件事还很鲜活）"
 
         # ── 自然语言认知状态 ──
@@ -1220,6 +1567,12 @@ class ArisCognitiveBridge:
         try:
             current_topics = getattr(self, '_last_topics', None) or self._detect_topics(getattr(self, '_last_user_message', response)) or ["一般"]
             topic_tag = "/".join(current_topics[:2])
+            store_important(
+                content=f"正在和Lorry讨论: {topic_tag}",
+                layer="working",
+                importance=0.3,
+                topics=current_topics[:2],
+            )
             wm_fragment = MemoryFragment(
                 content=f"正在和Lorry讨论: {topic_tag}",
                 layer="working",

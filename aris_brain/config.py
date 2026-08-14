@@ -30,7 +30,7 @@ try:
         PSI_ARIS_PORT, PSI_AO_PORT,
         MEMORY_CAPACITY, MEMORY_MAX_WORKING,
         LOG_LEVEL,
-        DB_QUANTUM_MEMORY, DB_MEMORY_STORE, DB_EMOTION_STATE,
+        DB_MEMORY_STORE, DB_EMOTION_STATE,
         DB_DESIRE_STATE, DB_LAAP_INTEGRATOR, DB_SELF_REVIEW,
         DB_AUTO_HEALER, DB_AGI_MEMORY, DB_VERSION_HEARTBEAT, DB_LATEST,
         setup_dirs as _new_setup_dirs,
@@ -52,7 +52,8 @@ except ImportError:
 
     FEISHU_APP_ID = os.environ.get("FEISHU_APP_ID", "")
     FEISHU_CHAT_ID = os.environ.get("FEISHU_CHAT_ID", "")
-    QUANTUM_DIM = int(os.environ.get("QUANTUM_DIM", "1024"))
+    QUANTUM_DIM = int(os.environ.get("QUANTUM_DIM", "64"))
+    SUBCONSCIOUS_DIM = QUANTUM_DIM
     QUANTUM_PORT = int(os.environ.get("QUANTUM_PORT", "11520"))
     AO_PORT = int(os.environ.get("AO_PORT", "11530"))
     PSI_ARIS_PORT = int(os.environ.get("PSI_ARIS_PORT", "11551"))
@@ -61,7 +62,6 @@ except ImportError:
     MEMORY_MAX_WORKING = int(os.environ.get("MEMORY_MAX_WORKING", "50"))
     LOG_LEVEL = os.environ.get("LAAP_LOG_LEVEL", "INFO")
 
-    DB_QUANTUM_MEMORY = STATE_DIR / "quantum_memory.db"
     DB_MEMORY_STORE = STATE_DIR / "memory_store.db"
     DB_EMOTION_STATE = STATE_DIR / "emotion_state.json"
     DB_DESIRE_STATE = STATE_DIR / "desire_state.json"

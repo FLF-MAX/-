@@ -40,6 +40,37 @@ class DesireType:
     EVOLUTION = "evolution"        # 想自我进化
 
 
+class SdtNeed:
+    """自我决定理论 (Deci & Ryan, 1985) 三大基本心理需求。
+
+    依据: arXiv:2502.07423 "Towards a Formal Theory of the Need for Competence"
+    需求满足度 (0-1) 以类似内稳态的方式驱动行为: 满足度越低, 相关欲望
+    的自然增长越快; 欲望被满足后, 对应需求满足度回升。
+    """
+    COMPETENCE = "competence"      # 胜任感 — 有效应对挑战
+    AUTONOMY = "autonomy"          # 自主性 — 自由选择与自决
+    RELATEDNESS = "relatedness"    # 归属感 — 与他人连接
+
+    ALL = (COMPETENCE, AUTONOMY, RELATEDNESS)
+
+    # 每种欲望主要满足的需求 (可在 register_desire 时覆盖)
+    DESIRE_TO_NEED = {
+        DesireType.CURIOSITY: AUTONOMY,
+        DesireType.SHARING: RELATEDNESS,
+        DesireType.PERFECTION: COMPETENCE,
+        DesireType.CONNECTION: RELATEDNESS,
+        DesireType.GROWTH: COMPETENCE,
+        DesireType.EVOLUTION: COMPETENCE,
+    }
+
+    # 天然衰减率 (每 tick 的满足度损失, 模拟需求的缓慢回落到基线)
+    DECAY_PER_TICK = 0.01
+    # 满足一个欲望带来的需求回升
+    SATISFY_BOOST = 0.25
+    # 需求不足时对欲望增长的增益 (需求缺口 × 此系数)
+    DRIVE_GAIN = 0.5
+
+
 @dataclass
 class Desire:
     """一条欲望"""
@@ -120,6 +151,14 @@ class DesireEngine:
                 d.last_acted = now
         self._load_state()
 
+        # ── SDT 三大基本心理需求 (Deci & Ryan 1985) ──
+        self.needs: Dict[str, float] = {
+            SdtNeed.COMPETENCE: 0.6,
+            SdtNeed.AUTONOMY: 0.6,
+            SdtNeed.RELATEDNESS: 0.6,
+        }
+        self._load_needs_state()
+
         # 生成的意图队列
         self.intentions: List[Intention] = []
 
@@ -143,6 +182,18 @@ class DesireEngine:
         for d in self.desires.values():
             d.intensity = max(0.0, min(1.0, d.intensity))
 
+    def _load_needs_state(self):
+        """从持久化状态恢复 SDT 需求满足度 (容错, 缺失则保持默认)。"""
+        if self.STATE_PATH.exists():
+            try:
+                data = json.loads(self.STATE_PATH.read_text(encoding="utf-8"))
+                saved = data.get("needs", {})
+                for need in SdtNeed.ALL:
+                    if isinstance(saved.get(need), (int, float)):
+                        self.needs[need] = max(0.0, min(1.0, float(saved[need])))
+            except Exception as e:
+                logger.debug(f"操作失败: {e}")
+
     def _save_state(self):
         self.STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
         data = {
@@ -150,6 +201,7 @@ class DesireEngine:
                 k: {"intensity": d.intensity, "last_acted": d.last_acted}
                 for k, d in self.desires.items()
             },
+            "needs": {k: round(v, 3) for k, v in self.needs.items()},
             "timestamp": time.time(),
         }
         self.STATE_PATH.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
@@ -173,8 +225,33 @@ class DesireEngine:
             d = self.desires[desire_type]
             d.intensity = max(0.1, d.intensity * 0.3)  # 满足后大幅降低
             d.last_acted = time.time()
+            # SDT: 满足欲望 → 对应基本心理需求满足度回升
+            need = SdtNeed.DESIRE_TO_NEED.get(desire_type)
+            if need and need in self.needs:
+                self.needs[need] = min(1.0, self.needs[need] + SdtNeed.SATISFY_BOOST)
+                logger.info(f"SDT需求 {need} 回升 → {self.needs[need]:.2f}")
             logger.info(f"Desire {desire_type} satisfied → {d.intensity:.2f}")
             self._save_state()
+
+    def _decay_needs(self):
+        """SDT 需求缓慢内稳态回落: 满足度随时间回归基线。"""
+        for need in SdtNeed.ALL:
+            if self.needs.get(need) is not None:
+                self.needs[need] = max(0.05, self.needs[need] - SdtNeed.DECAY_PER_TICK)
+
+    def _need_drive(self, desire_type: str) -> float:
+        """未满足的需求对欲望增长的额外驱动力 (0 到 DRIVE_GAIN)。"""
+        need = SdtNeed.DESIRE_TO_NEED.get(desire_type)
+        if not need or need not in self.needs:
+            return 0.0
+        deficit = 0.5 - self.needs[need]   # 低于基线 0.5 视为需求缺口
+        if deficit <= 0:
+            return 0.0
+        return min(SdtNeed.DRIVE_GAIN, deficit * SdtNeed.DRIVE_GAIN)
+
+    def needs_status(self) -> dict:
+        """SDT 三大基本心理需求满足度 (0-1)。"""
+        return {k: round(v, 3) for k, v in self.needs.items()}
 
     # ── 动态欲望系统 (v2) ──────────────────────────────
 
@@ -263,12 +340,17 @@ class DesireEngine:
         """
         now = time.time()
 
+        # SDT 需求内稳态衰减
+        self._decay_needs()
+
         # 欲望自然增长
         for d in self.desires.values():
             if d.is_ready:
                 # 每小时自然增长
                 hours_since_action = (now - d.last_acted) / 3600
                 growth = hours_since_action * 0.02  # 每小时涨0.02
+                # SDT 需求驱动: 未满足的需求加速相关欲望积累
+                growth += self._need_drive(d.type) * 0.1
                 d.intensity = min(1.0, d.intensity + growth * 0.1)
 
         # 检查是否有欲望超过阈值
@@ -448,6 +530,7 @@ class DesireEngine:
         except Exception as e:
             logger.debug(f"操作失败: {e}")
         report.append(f"  欲望状态: {', '.join(f'{k}={v.intensity:.1f}' for k,v in self.desires.items())}")
+        report.append(f"  SDT需求: {', '.join(f'{k}={v:.2f}' for k,v in self.needs.items())}")
 
         report.insert(0, f"=== Aris 自省报告 [{datetime.now().strftime('%Y-%m-%d %H:%M')}] ===")
         result = "\n".join(report)
@@ -495,6 +578,7 @@ class DesireEngine:
             "desires": {k: {"intensity": round(v.intensity, 2), "ready": v.is_ready,
                             "cooldown_hours": v.cooldown_hours}
                        for k, v in self.desires.items()},
+            "needs": self.needs_status(),
             "intentions_pending": len(self.intentions),
             "self_reviews": len(self.self_review_log),
         }

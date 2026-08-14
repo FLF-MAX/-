@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import random
 import sys
 import threading
@@ -111,13 +112,25 @@ class PsiCoreEngine:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=2.0)
 
+    @staticmethod
+    def _atomic_write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
+        """原子写：先写临时文件再 os.replace，避免读端看到半截文件。
+
+        psi_core 引擎与 HTTP 进程会并发写同一 input_queue/latest 文件，
+        跨进程互斥锁在纯 Python 里不可靠，原子替换保证要么旧数据
+        要么完整新数据（不会撕裂）。
+        """
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(text, encoding=encoding)
+        os.replace(tmp, path)
+
     def send_input(self, text: str) -> None:
         """Queue input for the next cycle."""
         input_queue = self.state_dir / "input_queue.json"
         try:
-            input_queue.write_text(
+            self._atomic_write_text(
+                input_queue,
                 json.dumps({"text": text, "timestamp": time.time(), "source": "external"}, ensure_ascii=False),
-                encoding="utf-8",
             )
         except Exception:
             pass
@@ -145,7 +158,9 @@ class PsiCoreEngine:
         try:
             with self._lock:
                 state_dict = self._state.to_dict()
-            latest.write_text(json.dumps(state_dict, ensure_ascii=False, indent=2), encoding="utf-8")
+            self._atomic_write_text(
+                latest, json.dumps(state_dict, ensure_ascii=False, indent=2)
+            )
             pid_file.write_text(str(threading.current_thread().ident or 0), encoding="utf-8")
         except Exception:
             pass

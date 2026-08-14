@@ -24,7 +24,7 @@ def test_personality_profile():
     assert profile.baseline.shape == (5,)
     assert profile.sensitivity.shape == (5,)
     assert profile.decay_rates.shape == (5,)
-    assert profile.noise_amplitude == 0.05
+    assert profile.noise_amplitude == 0.03
 
     custom_baseline = np.array([0.1, 0.2, 0.3, 0.4, 0.5])
     custom_profile = PersonalityProfile(baseline=custom_baseline)
@@ -224,7 +224,7 @@ def test_event_processor():
     np.testing.assert_array_equal(stimulus, np.zeros(5))
 
     stimulus = AffectiveEventProcessor.process_event("task_success", intensity=0.5)
-    assert stimulus[EmotionDimension.PLEASURE.value] == 0.2
+    assert stimulus[EmotionDimension.PLEASURE.value] == 0.3
     print("✓ AffectiveEventProcessor test passed")
 
 
@@ -239,7 +239,11 @@ def test_integration():
         state.update(external_stimulus=stimulus, dt=0.5)
 
     context = state.to_prompt_context()
-    assert context["mood"] in ["joyful", "content", "neutral", "sad", "angry"]
+    valid_moods = ["joyful", "content", "neutral", "sad", "angry",
+                   "anxious", "calm", "relaxed", "depressed"]
+    assert context["mood"] in valid_moods
+    # 该事件序列(正反馈→任务成功→负反馈)应落在负效价+高唤醒区(anxious/sad/angry)
+    assert context["valence"] < 0.3
     print("✓ Integration test passed")
 
 

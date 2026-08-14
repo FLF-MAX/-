@@ -14,9 +14,16 @@ flask>=3.0.0
 requests>=2.31.0
 numpy>=1.24.0
 aiohttp>=3.9.0
+mcp>=1.29,<2            # MCP SDK（Hermes 集成必需，stdio 模式）
+openai>=1.0             # DeepSeek API 客户端（llm_integration.DeepSeekProvider 必需，
+                        # 缺失时 initialize() 返回 False → 永远走 Zero-LLM 回退）
 
-# ── OPTIONAL: 记忆与语义引擎 ────────────────────────────
-# sentence-transformers        # 语义记忆嵌入 (~500MB 模型)
+# ── DEV: 测试与调试 ────────────────────────────────────
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+
+# ── 记忆与语义引擎 ────────────────────────────────
+sentence-transformers>=2.2.0  # 语义记忆嵌入（本地 bge 模型，离线可用）
 # chromadb>=0.4.0              # 向量数据库（替换 simple JSON 存储）
 # faiss-cpu>=1.7.0             # 高效向量检索
 
@@ -36,7 +43,3 @@ aiohttp>=3.9.0
 # ── OPTIONAL: TTS / 表达层 ─────────────────────────────
 # edge-tts>=6.0.0              # 免费 TTS
 
-# ── DEV: 测试与调试 ────────────────────────────────────
-# pytest>=7.0.0
-# pytest-asyncio>=0.21.0
-# pytest-cov>=4.0.0

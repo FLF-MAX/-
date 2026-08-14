@@ -26,7 +26,7 @@ from laap.agi.world_model import (
     LocalWorldModel, AbstractWorldModel, create_world_model,
 )
 from laap.agi.causal import (
-    UnifiedCausalEngine, QuantumCausalStore, CausalDiscovery,
+    UnifiedCausalEngine, VectorCausalStore, CausalDiscovery,
     ConditionalIndependenceTester, CausalBond,
     CausalCondition, CausalEffect, CausalRule,
     TemporalCausalLink, TemporalCausalChain,  # P1-1a
@@ -38,6 +38,8 @@ from laap.agi.causal import (
 # 向后兼容别名
 WorldModel = UnifiedWorldModel
 CausalEngine = UnifiedCausalEngine
+# 历史命名兼容（VectorCausalStore 原为 QuantumCausalStore）
+QuantumCausalStore = VectorCausalStore
 
 # 延迟加载其他模块以保持兼容
 try:
@@ -106,7 +108,7 @@ except ImportError:
 __all__ = [
     "UnifiedCausalEngine", "UnifiedWorldModel",
     "CausalEngine", "WorldModel",
-    "QuantumCausalStore", "CausalDiscovery",
+    "VectorCausalStore", "CausalDiscovery",
     "EntityType", "RelationType", "Entity", "Relation",
     "PhysicalProperties", "SpatialPos", "SocialAttributes",
     "CausalCondition", "CausalEffect", "CausalRule", "CausalBond",

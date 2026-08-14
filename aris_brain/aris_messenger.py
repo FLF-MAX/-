@@ -34,7 +34,8 @@ def get_feishu_token(app_id: str = None, app_secret: str = None) -> Optional[str
             for line in env_path.read_text(encoding="utf-8").split("\n"):
                 if line.startswith("FEISHU_APP_ID="):
                     app_id = line.split("=", 1)[1].strip()
-                elif line.startswith("FEISHU_APP_SECRET="os.environ.get("FEISHU_APP_SECRET", "")"=", 1)[1].strip()
+                elif line.startswith("FEISHU_APP_SECRET="):
+                    app_secret = line.split("=", 1)[1].strip()
 
     if not app_id or not app_secret:
         logger.error("Feishu credentials not found")

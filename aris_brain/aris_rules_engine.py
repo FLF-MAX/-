@@ -77,7 +77,17 @@ class Rule:
         ratio = len(long_matches or matched) / max(len(self.patterns), 1)
         matched_len = sum(len(p) for p in matched)
         density = matched_len / max(len(text), 1)
-        return max(base, ratio * 0.4 + min(density, 1.0) * 0.4 + short_bonus)
+        score = max(base, ratio * 0.4 + min(density, 1.0) * 0.4 + short_bonus)
+        # 意图优先级：明确的“记住”指令应优先于“回忆”，避免歧义误触
+        if self.intent == "remember_fact" and "记住" in text:
+            score += 0.25
+        if self.intent == "recall_fact" and "记住" in text:
+            score -= 0.25
+        # 疑问形式“你还记得…吗/吗？”是回忆，不是记住
+        if self.intent == "remember_fact" and ("记得" in text or "remember" in text.lower()):
+            if text.rstrip().endswith(("吗", "？", "?")) or "还" in text or "没" in text:
+                score -= 0.3
+        return max(score, 0.0)
 
 
 # ─── 规则引擎 ────────────────────────────────────────────
@@ -127,6 +137,9 @@ class RulesEngine:
         def tool_read_file(path: str, limit: int = 100) -> str:
             """读文件。"""
             try:
+                path = (path or "").strip()
+                if not path or path.startswith("{") or "{" in path:
+                    return "请告诉我你想读取哪个文件，例如：读取 aris_brain/aris_rules_engine.py"
                 p = _resolve_path(path)
                 if not p.exists():
                     return f"[文件不存在] {path}"
@@ -442,14 +455,15 @@ print(r["output"][:2000])
                 return f"[写入失败] {e}"
 
         def tool_count_lines(path: str = ".") -> str:
-            """统计目录下各类文件行数。"""
+            """统计文件或目录下的代码行数。"""
             try:
                 p = _resolve_path(path)
                 if not p.exists():
                     return f"[路径不存在] {path}"
                 counts = {}
                 total = 0
-                for f in p.rglob("*"):
+                files = [p] if p.is_file() else list(p.rglob("*"))
+                for f in files:
                     if f.is_file() and f.suffix in (".py", ".js", ".ts", ".md", ".txt", ".json", ".yaml", ".yml", ".rs", ".go"):
                         try:
                             n = len(f.read_text(encoding="utf-8", errors="ignore").splitlines())
@@ -552,7 +566,7 @@ print(r["output"][:2000])
             ),
             Rule(
                 name="read_code",
-                patterns=["读取", "打开文件", "查看文件", "读文件", "看", "显示", "read", "open", "cat", "打印"],
+                patterns=["读取", "打开文件", "查看文件", "读文件", "看文件", "看看文件", "查看", "显示文件", "read", "open", "cat", "打印"],
                 intent="read_file",
                 description="读取文件内容",
                 steps=[
@@ -562,7 +576,7 @@ print(r["output"][:2000])
             ),
             Rule(
                 name="list_files_rule",
-                patterns=["列出目录", "有哪些文件", "显示目录", "目录列表", "dir"],
+                patterns=["列出目录", "有哪些文件", "显示目录", "目录列表", "当前目录", "看看目录", "看目录", "dir"],
                 intent="list_files",
                 description="列出目录内容",
                 steps=[
@@ -592,7 +606,7 @@ print(r["output"][:2000])
             ),
             Rule(
                 name="recall_fact_rule",
-                patterns=["回忆", "记得", "想起", "我之前说过", "我以前说", "recall memory"],
+                patterns=["回忆", "记得", "想起", "我之前说过", "我以前说", "我的名字", "我叫什么", "我是什么", "我的名字是", "我叫", "记住我说了什么", "recall memory"],
                 intent="recall_fact",
                 description="从语义记忆召回相关事实",
                 steps=[
@@ -732,15 +746,38 @@ print(r["output"][:2000])
         for prefix in ["运行", "执行", "启动", "run", "execute"]:
             if prefix in text:
                 idx = text.index(prefix) + len(prefix)
-                intent["params"]["cmd"] = text[idx:].strip()[:100]
+                cmd = text[idx:].strip()[:100]
+                for tail in ["一下", "看看", "帮我", "现在", "命令", "这个"]:
+                    cmd = cmd.replace(tail, "")
+                cmd = cmd.strip(" ，。！？、:：\"'“”`")
+                intent["params"]["cmd"] = cmd
                 break
         
         # 提取搜索查询
         for prefix in ["搜索", "搜一下", "找", "查找", "search", "find"]:
             if prefix in text:
                 idx = text.index(prefix) + len(prefix)
-                intent["params"]["query"] = text[idx:].strip()[:50]
+                q = text[idx:].strip()[:50]
+                # 剥离“一下/在哪里/有没有/看看”等虚词尾缀，避免整句污染搜索词
+                for tail in ["在哪里", "在哪", "在哪个文件", "有没有", "一下", "看看", "帮我", "哪里"]:
+                    q = q.replace(tail, "")
+                q = q.strip(" ，。！？、:：\"'“”`")
+                intent["params"]["query"] = q
                 break
+
+        # 提取记忆召回查询（回忆/我的名字/我叫什么等）
+        if "query" not in intent["params"]:
+            for prefix in ["回忆", "想起", "记得", "我的名字", "我叫什么", "我是什么", "我的名字是", "我叫"]:
+                if prefix in text:
+                    idx = text.index(prefix) + len(prefix)
+                    q = text[idx:].strip()[:50]
+                    for tail in ["在哪里", "是什么", "来着", "还记得吗", "吗", "？", "?"]:
+                        q = q.replace(tail, "")
+                    q = q.strip(" ，。！？、:：\"'“”`")
+                    if not q:
+                        q = text.strip(" ，。！？、")[:30]
+                    intent["params"]["query"] = q
+                    break
         
         # 提取要记住的事实
         for prefix in ["记住", "记下来", "别忘了", "记住我说"]:
@@ -830,6 +867,11 @@ print(r["output"][:2000])
                     # 模板替换 {key} → context里的值或params里的值
                     for ctx_key in list(context.keys()) + list(params.keys()):
                         v = v.replace(f"{{{ctx_key}}}", str(context.get(ctx_key, params.get(ctx_key, v))))
+                    # 仍未填充的占位符（如 {path} 但用户没给路径）→ 用工具默认参数值兜底
+                    if "{" in v and "}" in v:
+                        default = self._tool_default(step.tool, k)
+                        if default is not None:
+                            v = default
                 step_params[k] = v
             
             # 调用工具
@@ -846,6 +888,20 @@ print(r["output"][:2000])
                 context[step.output_key or "error"] = f"[执行失败] {e}"
         
         return context
+
+    def _tool_default(self, tool_name: str, param_name: str):
+        """取工具函数的默认参数值（用于填充未命中的 {占位符}）。"""
+        try:
+            from inspect import Parameter, signature
+            fn = self.tools.get(tool_name)
+            if fn is None:
+                return None
+            for pname, p in signature(fn).parameters.items():
+                if pname == param_name and p.default is not Parameter.empty:
+                    return p.default
+        except Exception:
+            pass
+        return None
 
     # ─── 输出装配 ────────────────────────────────────────
 

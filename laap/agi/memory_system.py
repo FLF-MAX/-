@@ -22,6 +22,8 @@ import time
 import uuid
 import math
 import heapq
+import os
+import sys
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple, Callable
@@ -82,6 +84,7 @@ class EpisodicMemory:
         self._time_index: Dict[float, List[str]] = defaultdict(list)
         self._emotion_index: Dict[Tuple[int, int], List[str]] = defaultdict(list)
         self._narrative_cache: Dict[str, str] = {}
+        self._tok_cache: Dict[str, Set[str]] = {}
 
     def _emotion_key(self, valence: float, arousal: float) -> Tuple[int, int]:
         valence_bin = int(valence * 10)
@@ -138,23 +141,68 @@ class EpisodicMemory:
         events = [t.content for t in sorted_traces]
         return " → ".join(events)
 
+    def _tokenize_content(self, text: str) -> Set[str]:
+        """分词：中文用词典分词（无空格分割语句），英文/数字按空格。
+        fallback 到单字符集（保证总是有召回）。内容级缓存，避免重复分词。
+        """
+        cached = self._tok_cache.get(text)
+        if cached is not None:
+            return cached
+        words = set(text.lower().split())
+        try:
+            brain_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "aris_brain")
+            if brain_dir not in sys.path:
+                sys.path.insert(0, brain_dir)
+            tokens = self._tok(text)
+            if tokens:
+                words |= tokens
+        except Exception:
+            pass
+        # 过滤：编号 token（TAG123 / 轮次数字）不属于语义相关
+        words = {w for w in words
+                 if not (w.isdigit()
+                         or (w.lower().startswith("tag") and len(w) > 3 and w[3:].isdigit()))}
+        # 保底：CJK 字符集（中文无空格时也有召回面）
+        cjk = {ch for ch in text if "\u4e00" <= ch <= "\u9fff"}
+        if cjk:
+            words |= {ch for ch in cjk}
+        self._tok_cache[text] = words
+        if len(self._tok_cache) > 4096:
+            self._tok_cache.clear()
+        return words
+
+    _CJK_TOKENIZER = None
+
+    @classmethod
+    def _tok(cls, text: str) -> Set[str]:
+        """复用分词器单例，避免每次检索都重建词典/概念图。"""
+        if cls._CJK_TOKENIZER is None:
+            from aris_lm_v5 import ChineseTokenizer
+            cls._CJK_TOKENIZER = ChineseTokenizer()
+        return {t.text for t in cls._CJK_TOKENIZER.tokenize(text) if t.text.strip()}
+
     def retrieve_similar(
         self,
         query_content: str,
         max_results: int = 5,
         emotion_threshold: float = 0.3,
     ) -> List[MemoryTrace]:
-        query_words = set(query_content.lower().split())
+        query_words = self._tokenize_content(query_content)
         candidates = []
 
         for trace in self.episodes:
-            trace_words = set(trace.content.lower().split())
-            similarity = len(query_words & trace_words) / max(len(query_words), len(trace_words))
+            trace_words = self._tokenize_content(trace.content)
+            denom = max(len(query_words), len(trace_words))
+            if denom == 0:
+                continue
+            similarity = len(query_words & trace_words) / denom
             if similarity > 0:
-                candidates.append((similarity, trace))
+                # 次级排序：strength（情感/最近访问/置信度）——同话题多条时
+                # 优先返回更鲜活、更常用的那一条，而不是纯按插入序。
+                candidates.append((similarity, trace.strength, trace.timestamp, trace))
 
-        candidates.sort(key=lambda x: x[0], reverse=True)
-        return [c[1] for c in candidates[:max_results]]
+        candidates.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+        return [c[3] for c in candidates[:max_results]]
 
     def retrieve_by_time(
         self,

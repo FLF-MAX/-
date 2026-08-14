@@ -66,8 +66,8 @@ def bootstrap(
         integrator = get_integrator()
         results = integrator.load_all()
         modules_loaded = len(results.get("modules", []))
-        steps.append(f"✓ PSI 生理意识         2000Hz")
-        steps.append(f"✓ QRE 量子推理         182μs")
+        steps.append(f"✓ PSI 生理意识         10Hz (纯 Python)")
+        steps.append(f"✓ QRE 联想推理         已加载")
         steps.append(f"✓ 共 {modules_loaded} 个模块就绪")
     except Exception as e:
         steps.append(f"⚡ 轻量模式: {e}")

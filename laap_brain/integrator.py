@@ -383,17 +383,20 @@ class HermesIntegrator:
         state = self.before_turn(message)
 
         # 2. 注入认知状态到 system prompt
-        original_system = getattr(agent, "system_message", "")
+        # 对照官方源码 (run_agent.py): AIAgent 没有 system_message
+        # 属性，原代码 `agent.system_message = ...` 赋值不生效 —— 认知状态
+        # preamble 从未真正进入 Hermes。官方注入路径是
+        # run_conversation(user_message, system_message=...)，
+        # chat() 只接受 message 参数。
         cognitive_preamble = state.to_preamble()
-
-        if original_system:
-            agent.system_message = f"{cognitive_preamble}\n{original_system}"
-        else:
-            agent.system_message = cognitive_preamble
 
         # 3. Hermes 处理
         try:
-            response = agent.chat(message)
+            result = agent.run_conversation(
+                message,
+                system_message=cognitive_preamble,
+            )
+            response = result.get("final_response", "") if isinstance(result, dict) else str(result)
         except Exception as e:
             logger.error(f"Agent chat error: {e}")
             response = ""

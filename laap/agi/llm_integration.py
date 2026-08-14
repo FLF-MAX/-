@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 import json
+import os
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 
@@ -28,10 +29,10 @@ class LLMResult:
 class DeepSeekProvider:
     """DeepSeek LLM Provider"""
     
-    def __init__(self, api_key: str, model: str = "deepseek-v4-flash"):
+    def __init__(self, api_key: str, model: str = None):
         self.api_key = api_key
-        self.model = model
-        self.base_url = "https://api.deepseek.com"
+        self.model = model or os.environ.get("LLM_MODEL", "deepseek-v4-flash")
+        self.base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
         self._client = None
         self.total_calls = 0
         self.total_tokens = 0

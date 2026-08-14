@@ -123,8 +123,8 @@ class CausalRule:
     def to_dict(self) -> dict:
         return {
             "name": self.name, "action": self.action,
-            "conditions": [(c.source, c.property, c.operator, str(c.value)) for c in self.conditions],
-            "effects": [(e.target, e.property, e.operation, str(e.value)) for e in self.effects],
+            "conditions": [(c.source, c.property, c.operator, c.value) for c in self.conditions],
+            "effects": [(e.target, e.property, e.operation, e.value) for e in self.effects],
             "probability": self.probability, "delay": self.delay_seconds,
             "domain": self.domain, "confidence": round(self.confidence, 3),
             "observations": self.observation_count,
@@ -135,14 +135,13 @@ class CausalRule:
 # 模式二：量子因果编码 (from aris_brain/ao_metacog.py)
 # ═══════════════════════════════════════════════════════════════
 
-class QuantumCausalStore:
+class VectorCausalStore:
     """
-    量子因果存储 — 因果链作为量子叠加态。
+    向量因果存储 — 因果链作为向量关联。
 
-    |Ψ_causal⟩ = Σ α_i |cause_i⟩ ⊗ |effect_i⟩
-
-    每个因果链是一个纠缠态：
-      原因和效应在量子层面纠缠在一起。
+    每对 (cause_vector, effect_vector) 带置信度，经余弦相似度匹配召回。
+    （历史命名 quantum：原文档以"叠加态 |Ψ⟩ = Σ α_i |cause_i⟩ ⊗ |effect_i⟩"
+    描述同一向量关联语义，属装饰性命名，已改名反映真实实现。）
     """
 
     def __init__(self, dim: int = 64, max_links: int = 2000):
@@ -152,11 +151,19 @@ class QuantumCausalStore:
         self.causal_links: List[Tuple[np.ndarray, np.ndarray, float, str, float]] = []
         self._total_inferences = 0
 
+    @staticmethod
+    def _pad_vector(v: np.ndarray, dim: int) -> np.ndarray:
+        """规整向量到 dim 维：截断超出部分，不足的补零，避免维度错位。"""
+        v = np.asarray(v, dtype=float).flatten()
+        if len(v) >= dim:
+            return v[:dim]
+        return np.pad(v, (0, dim - len(v)), mode="constant")
+
     def learn(self, cause: np.ndarray, effect: np.ndarray,
               confidence: float = 0.5, domain: str = "general") -> bool:
         """学习一个因果关系。返回 True 表示新增，False 表示加强已有。"""
-        c = cause.flatten()[:self.dim]
-        e = effect.flatten()[:self.dim]
+        c = self._pad_vector(cause, self.dim)
+        e = self._pad_vector(effect, self.dim)
         cn = np.linalg.norm(c)
         en = np.linalg.norm(e)
         if cn > 1e-8: c = c / cn
@@ -188,7 +195,7 @@ class QuantumCausalStore:
         if not self.causal_links:
             return []
 
-        query = cause.flatten()[:self.dim]
+        query = self._pad_vector(cause, self.dim)
         qn = np.linalg.norm(query)
         if qn > 1e-8: query = query / qn
 
@@ -211,7 +218,7 @@ class QuantumCausalStore:
                     top_k: int = 5, domain_filter: Optional[str] = None
                     ) -> List[Tuple[np.ndarray, float, str]]:
         """逆向推理：从效应推出可能的原因"""
-        query = effect.flatten()[:self.dim]
+        query = self._pad_vector(effect, self.dim)
         qn = np.linalg.norm(query)
         if qn > 1e-8: query = query / qn
 
@@ -683,7 +690,7 @@ class UnifiedCausalEngine:
     def __init__(self, quantum_dim: int = 64, name: str = "UnifiedCausalEngine"):
         self.name = name
         # 模式1: 量子因果存储
-        self.quantum = QuantumCausalStore(dim=quantum_dim)
+        self.quantum = VectorCausalStore(dim=quantum_dim)
 
         # 模式2: 物理因果规则
         self.rules: Dict[str, CausalRule] = {}
@@ -1386,6 +1393,12 @@ class UnifiedCausalEngine:
             "bonds": {k: b.to_dict() for k, b in self.bonds.items()},
             "quantum_stats": self.quantum.stats(),
             "entity_states": self.entity_states,
+            "temporal_links": {k: l.to_dict() for k, l in self.temporal_links.items()},
+            "temporal_chains": {k: {
+                "name": c.name, "domain": c.domain,
+                "links": [(l.cause_name, l.effect_name, l.delay_mean) for l in c.links],
+            } for k, c in self.temporal_chains.items()},
+            "multi_factor_rules": {k: r.to_dict() for k, r in self.multi_factor_rules.items()},
         }
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1401,6 +1414,21 @@ class UnifiedCausalEngine:
             return False
         try:
             data = json.loads(p.read_text(encoding="utf-8"))
+            # 旧版本 to_dict 把比较值 str() 化，这里还原数值/布尔，保住语义
+            def _restore(v):
+                if isinstance(v, str):
+                    low = v.strip()
+                    if low in ("True", "False"):
+                        return low == "True"
+                    try:
+                        return int(low)
+                    except ValueError:
+                        pass
+                    try:
+                        return float(low)
+                    except ValueError:
+                        return v
+                return v
             # 只恢复规则和键（向量数据太大，需要重建）
             for r_data in data.get("rules", []):
                 rule = CausalRule(
@@ -1409,10 +1437,56 @@ class UnifiedCausalEngine:
                     probability=r_data.get("probability", 1.0),
                     confidence=r_data.get("confidence", 0.5),
                     observation_count=r_data.get("observations", 0),
+                    conditions=[
+                        CausalCondition(
+                            source=c[0], property=c[1],
+                            operator=c[2], value=_restore(c[3]),
+                        ) for c in r_data.get("conditions", [])
+                    ],
+                    effects=[
+                        CausalEffect(
+                            target=e[0], property=e[1],
+                            operation=e[2], value=_restore(e[3]),
+                        ) for e in r_data.get("effects", [])
+                    ],
                 )
                 self.rules[rule.name] = rule
+            for b_key, b_data in data.get("bonds", {}).items():
+                bond = CausalBond(
+                    action=b_data.get("action", ""),
+                    target_type=b_data.get("target", ""),
+                    effect_desc=b_data.get("effect", ""),
+                    weight=b_data.get("weight", 0.5),
+                    confidence=b_data.get("confidence", 0.5),
+                    observation_count=b_data.get("observations", 0),
+                    positive_count=b_data.get("positive", 0),
+                    domain=b_data.get("domain", "general"),
+                )
+                self.bonds[b_key] = bond
+            for l_key, l_data in data.get("temporal_links", {}).items():
+                link = TemporalCausalLink(
+                    cause_name=l_data.get("cause", ""),
+                    effect_name=l_data.get("effect", ""),
+                    delay_mean=l_data.get("delay_mean", 0.0),
+                    delay_std=l_data.get("delay_std", 0.0),
+                    confidence=l_data.get("confidence", 0.5),
+                    observation_count=l_data.get("observations", 0),
+                    domain=l_data.get("domain", "general"),
+                )
+                self.temporal_links[l_key] = link
+            for c_key, c_data in data.get("temporal_chains", {}).items():
+                chain = TemporalCausalChain(
+                    name=c_data.get("name", c_key),
+                    domain=c_data.get("domain", "general"),
+                )
+                for cause, effect, delay in c_data.get("links", []):
+                    chain.add_link(TemporalCausalLink(
+                        cause_name=cause, effect_name=effect,
+                        delay_mean=float(delay or 0.0),
+                    ))
+                self.temporal_chains[c_key] = chain
             self.entity_states = data.get("entity_states", {})
-            logger.info(f"[CausalEngine] 从 {path} 加载, {len(self.rules)} 条规则")
+            logger.info(f"[CausalEngine] 从 {path} 加载, {len(self.rules)} 条规则, {len(self.bonds)} 条因果键, {len(self.temporal_links)} 条时间链")
             return True
         except Exception as e:
             logger.error(f"[CausalEngine] 加载失败: {e}")

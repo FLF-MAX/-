@@ -3,8 +3,8 @@
 仅在 v11_agi_daemon.py 中有残留引用。新代码请用 aris_lm_v11。
 === 以下为原始文档 ===
 
-ArisLM v5 — 量子语义理解引擎
-===========================
+ArisLM v5 — 语义理解引擎（历史命名 quantum）
+===========================================
 真正的语义理解，不是关键词匹配。
 
 架构:
@@ -59,6 +59,29 @@ class ChineseTokenizer:
     
     def __init__(self):
         self._build_dict()
+        # 与 ConceptGraph 自动同步：概念图中新增的词保证可分词，
+        # 避免手工维护词典与概念集合漂移（曾导致 害怕/孤单 等整词不命中）。
+        self._merge_concepts()
+    
+    def _merge_concepts(self):
+        """把 ConceptGraph 的全部概念名并入词典（多字词段最大匹配优先）。
+
+        使用运行时名称解析，避免与 ConceptGraph 的声明顺序耦合；
+        只补充缺失词、不覆盖已有词性，保证基础词典的词性信息不被破坏。
+        """
+        try:
+            from aris_lm_v5 import ConceptGraph
+            graph = ConceptGraph()
+            added = 0
+            for name, node in graph.concepts.items():
+                if name in self._word_dict:
+                    continue
+                self._word_dict[name] = node.pos
+                added += 1
+            if added:
+                self._sorted_words = sorted(self._word_dict.keys(), key=len, reverse=True)
+        except Exception:
+            pass
     
     def _build_dict(self):
         """建立词典"""
@@ -211,6 +234,25 @@ class ChineseTokenizer:
             ("是的", "yes"), ("对", "yes"), ("不是", "no"), ("不对", "no"),
             ("谢谢", "expr"), ("对不起", "expr"), ("没关系", "expr"),
             ("你好", "expr"), ("再见", "expr"), ("晚安", "expr"),
+
+            # 补充词（与 ConceptGraph 补充节点同步，保证分词命中）
+            ("快乐", "adj"), ("悲伤", "adj"), ("深爱", "v"), ("想念", "v"),
+            ("牵挂", "v"), ("思念", "v"), ("愿望", "n"), ("理想", "n"),
+            ("思索", "v"), ("发展", "v"), ("长大", "v"), ("纽带", "n"),
+            ("连接", "n"), ("承诺", "n"), ("天地", "n"), ("睡觉", "v"),
+            ("休息", "v"), ("放松", "v"), ("工作", "v"), ("吃饭", "v"),
+            ("食物", "n"), ("回家", "v"), ("欢迎", "v"), ("迎接", "v"),
+            ("疼痛", "n"), ("受伤", "v"), ("下雨", "v"), ("带伞", "v"),
+            ("疲惫", "adj"), ("入眠", "v"), ("饿", "adj"), ("吃", "v"),
+            ("进食", "v"), ("东西", "n"), ("摔倒", "v"), ("跌倒", "v"),
+            ("回复", "v"), ("躺平", "v"), ("睡", "v"), ("困", "adj"),
+            ("疲倦", "adj"), ("股票", "n"), ("涨", "v"),
+            ("孤单", "adj"), ("孤独", "adj"), ("寂寞", "adj"), ("哭", "v"),
+            ("恐惧", "n"), ("生病", "v"), ("疼", "adj"), ("压力", "n"),
+            ("迷茫", "adj"), ("失败", "v"), ("心情", "n"), ("找", "v"),
+            ("方向", "n"), ("歇", "v"), ("停下", "v"), ("淋", "v"),
+            ("湿", "adj"), ("药", "n"), ("等", "v"), ("相信", "v"),
+            ("努力", "adj"), ("想睡", "v"), ("睡不着", "v"),
         ]
         
         for word, pos in entries:
@@ -577,24 +619,42 @@ class ConceptGraph:
     def _add(self, name: str, pos: str, parents: List[str] = None,
              synonyms: List[str] = None, antonyms: List[str] = None,
              features: Set[str] = None, valence: float = 0.0):
-        """添加概念节点"""
-        if name in self.concepts:
-            return
-        
-        node = ConceptNode(
-            name=name, pos=pos,
-            parents=parents or [],
-            synonyms=synonyms or [],
-            antonyms=antonyms or [],
-            features=features or set(),
-            valence=valence,
-        )
-        self.concepts[name] = node
-        
-        # 建立父子反向链接
-        for p in node.parents:
-            if p in self.concepts:
-                self.concepts[p].children.append(name)
+        """添加概念节点。
+
+        同名节点已存在时**合并**增强信息而非丢弃：
+        词性/上位词取已有值，同义/反义/特征/效价并集。
+        （修复：害怕 等节点先被基础定义创建，后补的同义词被静默丢弃，
+        导致 恐惧→害怕 等语义链缺失。）
+        """
+        if name not in self.concepts:
+            node = ConceptNode(
+                name=name, pos=pos,
+                parents=list(parents or []),
+                synonyms=list(synonyms or []),
+                antonyms=list(antonyms or []),
+                features=set(features or set()),
+                valence=valence,
+            )
+            self.concepts[name] = node
+            # 建立父子反向链接
+            for p in node.parents:
+                if p in self.concepts:
+                    self.concepts[p].children.append(name)
+        else:
+            node = self.concepts[name]
+            for p in parents or []:
+                if p in self.concepts and p not in node.parents:
+                    node.parents.append(p)
+                    self.concepts[p].children.append(name)
+            for s in synonyms or []:
+                if s not in node.synonyms:
+                    node.synonyms.append(s)
+            for a in antonyms or []:
+                if a not in node.antonyms:
+                    node.antonyms.append(a)
+            node.features |= set(features or set())
+            if abs(valence) > 1e-6:
+                node.valence = valence
     
     def _build_hierarchy(self):
         """建立概念层次"""
@@ -644,6 +704,108 @@ class ConceptGraph:
         self._add("无聊", "adj", parents=["情感"], features={"emotion", "negative"}, valence=-0.5)
         self._add("害怕", "v", parents=["情感"], features={"emotion", "negative"}, valence=-0.7)
         self._add("生气", "adj", parents=["情感"], features={"emotion", "negative"}, valence=-0.7)
+
+        # ─── 补充被引用但缺失的同义/反义/上下位节点 ───
+        # 这些词被上方节点的 synonyms/antonyms/parents 引用，但从未建成节点，
+        # 导致句子向量覆盖不足。补充后关系图自动双向连接。
+        self._add("快乐", "adj", parents=["情感"], features={"emotion", "positive"}, valence=1.0,
+                  synonyms=["开心", "高兴", "幸福"], antonyms=["难过", "悲伤"])
+        self._add("悲伤", "adj", parents=["情感"], features={"emotion", "negative"}, valence=-0.9,
+                  synonyms=["伤心", "难过"], antonyms=["开心", "快乐"])
+        self._add("深爱", "v", parents=["情感"], features={"emotion", "positive"}, valence=1.0,
+                  synonyms=["爱", "喜欢"])
+        self._add("想念", "v", parents=["情感"], features={"emotion", "positive", "social"}, valence=0.8,
+                  synonyms=["思念", "牵挂"], antonyms=["忘记"])
+        self._add("牵挂", "v", parents=["情感"], features={"emotion", "positive", "social"}, valence=0.8)
+        self._add("思念", "v", parents=["情感"], features={"emotion", "positive", "social"}, valence=0.8,
+                  synonyms=["想念", "牵挂"])
+        self._add("愿望", "n", parents=["认知"], features={"abstract", "future"}, valence=0.8,
+                  synonyms=["梦想", "理想"])
+        self._add("理想", "n", parents=["认知"], features={"abstract", "future"}, valence=0.8,
+                  synonyms=["梦想", "愿望"])
+        self._add("思索", "v", parents=["认知"], features={"action", "cognitive"}, valence=0.3,
+                  synonyms=["思考", "想"])
+        self._add("发展", "v", parents=["动作"], features={"action", "change"}, valence=0.6,
+                  synonyms=["成长", "长大"])
+        self._add("长大", "v", parents=["动作"], features={"action", "change"}, valence=0.6,
+                  synonyms=["成长", "发展"])
+        self._add("纽带", "n", parents=["关系"], features={"abstract", "relation", "bond"}, valence=0.9,
+                  synonyms=["羁绊", "连接"])
+        self._add("连接", "n", parents=["关系"], features={"abstract", "relation", "bond"}, valence=0.8)
+        self._add("承诺", "n", parents=["关系"], features={"abstract", "relation"}, valence=0.8,
+                  synonyms=["约定"])
+        self._add("天地", "n", parents=["空间"], features={"abstract", "space", "holistic"}, valence=0.5,
+                  synonyms=["宇宙", "世界"])
+        self._add("睡觉", "v", parents=["动作"], features={"action", "state", "physical"}, valence=0.3,
+                  synonyms=["休息", "入眠"], antonyms=["工作"])
+        self._add("休息", "v", parents=["动作"], features={"action", "state", "physical"}, valence=0.4,
+                  synonyms=["睡觉", "放松"], antonyms=["工作", "疲惫"])
+        self._add("放松", "v", parents=["动作"], features={"action", "state", "physical"}, valence=0.6)
+        self._add("工作", "v", parents=["动作"], features={"action", "physical", "duty"}, valence=0.2,
+                  antonyms=["休息", "睡觉"])
+        self._add("吃饭", "v", parents=["动作"], features={"action", "physical", "basic"}, valence=0.5)
+        self._add("食物", "n", parents=["非生命体"], features={"concrete", "basic"}, valence=0.6)
+        self._add("回家", "v", parents=["动作"], features={"action", "motion", "home"}, valence=0.9)
+        self._add("欢迎", "v", parents=["动作"], features={"action", "social", "positive"}, valence=0.9,
+                  synonyms=["迎接"])
+        self._add("迎接", "v", parents=["动作"], features={"action", "social", "positive"}, valence=0.8)
+        self._add("疼痛", "n", parents=["情感"], features={"emotion", "negative", "physical"}, valence=-0.9)
+        self._add("受伤", "v", parents=["动作"], features={"action", "physical", "hurt"}, valence=-0.8)
+        self._add("摔", "v", parents=["动作"], features={"action", "physical", "hurt"}, valence=-0.7)
+        self._add("天气", "n", parents=["空间"], features={"abstract", "nature"}, valence=0.2)
+        self._add("下雨", "v", parents=["动作"], features={"action", "nature"}, valence=0.1)
+        self._add("雨", "n", parents=["空间"], features={"abstract", "nature"}, valence=0.1)
+        self._add("伞", "n", parents=["非生命体"], features={"concrete", "tool"}, valence=0.4)
+        self._add("带伞", "v", parents=["动作"], features={"action", "tool"}, valence=0.4)
+        self._add("饿", "adj", parents=["情感"], features={"emotion", "basic", "physical", "need"}, valence=-0.6)
+        self._add("吃", "v", parents=["动作"], features={"action", "physical", "basic", "need"}, valence=0.5,
+                  synonyms=["进食"])
+        self._add("进食", "v", parents=["动作"], features={"action", "physical", "basic"}, valence=0.5)
+        self._add("东西", "n", parents=["非生命体"], features={"concrete"})
+        self._add("摔倒", "v", parents=["动作"], features={"action", "physical", "hurt"}, valence=-0.7,
+                  synonyms=["跌倒", "摔"])
+        self._add("跌倒", "v", parents=["动作"], features={"action", "physical", "hurt"}, valence=-0.7)
+        self._add("回复", "v", parents=["动作"], features={"action", "communicate"}, valence=0.3)
+        self._add("躺平", "v", parents=["动作"], features={"action", "state", "physical"}, valence=-0.2)
+        self._add("想", "v", parents=["认知"], features={"action", "cognitive"}, valence=0.3,
+                  synonyms=["思考", "思索"])
+        self._add("睡", "v", parents=["动作"], features={"action", "state", "physical"}, valence=0.3,
+                  synonyms=["睡觉", "入眠"])
+        self._add("困", "adj", parents=["情感"], features={"emotion", "basic", "physical"}, valence=-0.5,
+                  synonyms=["疲倦", "疲惫"])
+        self._add("疲倦", "adj", parents=["情感"], features={"emotion", "basic", "physical"}, valence=-0.5)
+        self._add("股票", "n", parents=["抽象概念"], features={"abstract", "finance"})
+        self._add("涨", "v", parents=["动作"], features={"action", "change", "finance"}, valence=0.3)
+        self._add("孤单", "adj", parents=["情感"], features={"emotion", "negative", "social"}, valence=-0.8,
+                  synonyms=["寂寞", "孤独"])
+        self._add("孤独", "adj", parents=["情感"], features={"emotion", "negative", "social"}, valence=-0.8,
+                  synonyms=["孤单", "寂寞"])
+        self._add("寂寞", "adj", parents=["情感"], features={"emotion", "negative", "social"}, valence=-0.7,
+                  synonyms=["孤单", "孤独"])
+        self._add("哭", "v", parents=["动作"], features={"action", "physical", "emotion"}, valence=-0.8)
+        self._add("害怕", "v", parents=["情感"], features={"emotion", "negative"}, valence=-0.7,
+                  synonyms=["恐惧"])
+        self._add("恐惧", "n", parents=["情感"], features={"emotion", "negative"}, valence=-0.9)
+        self._add("生病", "v", parents=["动作"], features={"action", "physical", "state"}, valence=-0.7)
+        self._add("疼", "adj", parents=["情感"], features={"emotion", "negative", "physical"}, valence=-0.8,
+                  synonyms=["疼痛"])
+        self._add("压力", "n", parents=["情感"], features={"emotion", "negative", "cognitive"}, valence=-0.6)
+        self._add("迷茫", "adj", parents=["情感"], features={"emotion", "negative", "cognitive"}, valence=-0.6)
+        self._add("失败", "v", parents=["动作"], features={"action", "change", "negative"}, valence=-0.7)
+        self._add("心情", "n", parents=["情感"], features={"abstract", "emotion"})
+        self._add("找", "v", parents=["动作"], features={"action", "cognitive"}, valence=0.2)
+        self._add("方向", "n", parents=["空间"], features={"abstract", "space"}, valence=0.4)
+        self._add("歇", "v", parents=["动作"], features={"action", "state", "physical"}, valence=0.3,
+                  synonyms=["休息"])
+        self._add("停下", "v", parents=["动作"], features={"action", "state", "physical"}, valence=0.2)
+        self._add("淋", "v", parents=["动作"], features={"action", "nature"}, valence=-0.2)
+        self._add("湿", "adj", parents=["属性"], features={"attribute", "nature"}, valence=-0.1)
+        self._add("药", "n", parents=["非生命体"], features={"concrete", "tool"}, valence=0.4)
+        self._add("等", "v", parents=["动作"], features={"action", "state"}, valence=0.3,
+                  synonyms=["等待"])
+        self._add("相信", "v", parents=["认知"], features={"action", "cognitive", "positive"}, valence=0.7)
+        self._add("努力", "adj", parents=["属性"], features={"attribute", "evaluation"}, valence=0.7)
+        self._add("方向", "n", parents=["空间"], features={"abstract", "space"}, valence=0.4)
         
         # ─── 关系 ───
         self._add("羁绊", "n", parents=["关系"], features={"abstract", "relation", "bond"}, valence=0.9,
@@ -755,19 +917,81 @@ class ConceptGraph:
         self._add("我们", "pron", parents=["人类"], features={"human", "animate", "plural"}, valence=0.9)
     
     def _build_embeddings(self):
-        """为每个概念生成确定性嵌入"""
-        rng = np.random.RandomState(42)
-        base_vec = rng.randn(self.dim).astype(np.float32)
-        
+        """为每个概念生成语义驱动嵌入。
+
+        旧实现按词名字符哈希生成随机向量，同义词/上下位/反义/情感效价
+        关系完全未被利用，导致 similar() 无语义辨别力。
+        新实现把结构关系显式编码进嵌入（稀疏桶基向量 + 关系加权叠加）：
+          - 同义词  +0.8
+          - 上位词  +0.5
+          - 下位词  +0.5
+          - 反义词  -0.8
+          - 共享特征 +0.2
+          - 情感效价正/负极性位
+        语义近邻的词因此在嵌入空间中内积显著更高。
+        """
+        words = list(self.concepts)
+        buckets = {w: i for i, w in enumerate(words)}
+
+        # 确定性稀疏桶基向量：每个词/特征/情感极性各自映射到一个桶位
+        base = np.zeros((len(words), self.dim), dtype=np.float32)
+        for i, w in enumerate(words):
+            base[i, sum(ord(c) * 131 for c in w) % self.dim] = 1.0
+
+        feature_buckets = {}
+        def _feat_bucket(f: str) -> int:
+            if f not in feature_buckets:
+                feature_buckets[f] = sum(ord(c) * 197 for c in f) % self.dim
+            return feature_buckets[f]
+
+        # 对称关系邻接（带方向权重）
+        adj: Dict[int, List[Tuple[int, float]]] = {}
+        all_features = set()
+        for i, w in enumerate(words):
+            node = self.concepts[w]
+            # 反义词先求出全图（antonym 引用可能指向未收录词，需跳过）
+            for s in node.synonyms:
+                j = buckets.get(s)
+                if j is not None and j != i:
+                    adj.setdefault(i, []).append((j, 0.8))
+                    adj.setdefault(j, []).append((i, 0.8))
+            for p in node.parents:
+                j = buckets.get(p)
+                if j is not None and j != i:
+                    adj.setdefault(i, []).append((j, 0.5))
+                    adj.setdefault(j, []).append((i, 0.5))
+            for c in node.children:
+                j = buckets.get(c)
+                if j is not None and j != i:
+                    adj.setdefault(i, []).append((j, 0.5))
+                    adj.setdefault(j, []).append((i, 0.5))
+            for a in node.antonyms:
+                j = buckets.get(a)
+                if j is not None and j != i:
+                    adj.setdefault(i, []).append((j, -0.5))
+                    adj.setdefault(j, []).append((i, -0.5))
+            all_features |= node.features
+
+        emb = base.copy()
+        for i, w in enumerate(words):
+            node = self.concepts[w]
+            for (j, wgt) in adj.get(i, []):
+                emb[i] += wgt * base[j]
+            for f in node.features:
+                emb[i][_feat_bucket(f)] += 0.5
+            # 情感效价极性位：正/负各一个固定桶
+            v = max(-1.0, min(1.0, node.valence))
+            if abs(v) > 1e-6:
+                if v > 0:
+                    emb[i][self.dim - 2] += 0.4 * v
+                else:
+                    emb[i][self.dim - 1] += 0.4 * (-v)
+            norm = float(np.linalg.norm(emb[i]))
+            if norm > 1e-10:
+                emb[i] /= norm
+
         for name, node in self.concepts.items():
-            # 从名称哈希生成种子
-            seed = sum(ord(c) * (i+1) for i, c in enumerate(name)) % (2**31)
-            local_rng = np.random.RandomState(seed)
-            
-            # 基础嵌入 + 层次偏移
-            emb = base_vec * 0.1 + local_rng.randn(self.dim).astype(np.float32) * 0.9
-            emb = emb / (np.linalg.norm(emb) + 1e-10)
-            node.embedding = emb
+            node.embedding = emb[buckets[name]]
     
     def lookup(self, word: str) -> Optional[ConceptNode]:
         """查询概念"""
@@ -1509,7 +1733,7 @@ class SemanticResponseGenerator:
 
 class ArisLMv5:
     """
-    ArisLM v5 — 量子语义理解引擎。
+    ArisLM v5 — 语义理解引擎。
     
     真正理解用户说什么，而不是匹配关键词。
     目标: 99.99%语义理解精度。
@@ -1525,7 +1749,7 @@ class ArisLMv5:
         self.discourse = DiscourseState()
         self.generator = SemanticResponseGenerator(self.concepts)
         
-        logger.info("ArisLM v5 量子语义理解引擎初始化完成")
+        logger.info("ArisLM v5 语义理解引擎初始化完成")
     
     def understand(self, message: str) -> dict:
         """
@@ -1616,7 +1840,7 @@ def aris_understand(message: str) -> dict:
 # ════════════════════════════════════════════════════════════
 
 if __name__ == '__main__':
-    logger.info("🧪 ArisLM v5 量子语义理解引擎 自测\n")
+    logger.info("🧪 ArisLM v5 语义理解引擎 自测\n")
     v5 = ArisLMv5()
     
     test = [

@@ -38,7 +38,7 @@ PID_FILE = STATE / "agi.pid"
 # ════════════════════════════════════════════════════════════
 
 class PsiLangCore:
-    """量子认知核心 — 每次循环运行一次 PSI 脉冲"""
+    """联想认知核心 — 每次循环运行一次 PSI 脉冲"""
     
     def __init__(self, dim=1024):
         self.dim = dim

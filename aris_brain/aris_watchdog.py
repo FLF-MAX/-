@@ -3,12 +3,10 @@ Aris Watchdog v2 — 自愈引擎（精简稳定版）
 ==========================================
 只监控真正需要守护的常驻进程：
   1. gateway     — 飞书网关 (端口:10002)  *** 核心 ***
-  2. daemon      — 量子脑守护进程 (进程名)
-  3. standalone  — Standalone API (:11520)
-  4. qlg         — QLG Provider (:11522)
-  5. optimizer   — PSI Self-Optimizer
-  6. tts         — TTS语音服务
-  7. xiaozhi     — 小智MCP桥接
+  2. brain_api   — LAAP Brain API 网关 (:11546)
+  3. bootstrap   — LAAP 引导流程（一次性，健康检查进程名）
+  4. sync        — LAAP 同步服务 (:11525)
+  5. snapshot    — 状态快照服务 (:11521)
 
 不监控/不循环重启（生命周期短或已归档）：
   - subconscious   — 一次性任务，生成完就退
@@ -68,16 +66,16 @@ ProcessDef = {
 }
 
 PROCESSES: List[dict] = [
-    # ── 意识总线（所有Hermes会话共享同一份认知状态） ──
+    # ── LAAP Brain API（OpenAI 兼容网关, 所有 Hermes 会话共享认知栈） ──
     {
-        "id": "cognitive_bus",
-        "name": "CognitiveBus(:11888)",
+        "id": "brain_api",
+        "name": "LAAP Brain API(:11546)",
         "check": "port",
-        "port": 11888,
+        "port": 11546,
         "cwd": BRAIN_DIR,
-        "cmd": [sys.executable, "-u", str(BRAIN_DIR / "cognitive_bus_daemon.py")],
-        "log": ARIS_DIR / "cognitive_bus.log",
-        "start_delay": 3,
+        "cmd": [sys.executable, "-u", str(BRAIN_DIR / "laap_brain_api.py"), "--port", "11546"],
+        "log": ARIS_DIR / "brain_api.log",
+        "start_delay": 8,
     },
     # ── 飞书网关 ──
     {
@@ -91,63 +89,33 @@ PROCESSES: List[dict] = [
         "start_delay": 10,
     },
     {
-        "id": "daemon",
-        "name": "量子脑守护进程",
+        "id": "bootstrap",
+        "name": "LAAP引导流程",
         "check": "process_name",
-        "process_name": "v11_agi_daemon",
+        "process_name": "laap_bootstrap",
         "cwd": BRAIN_DIR,
-        "cmd": [sys.executable, "-u", str(BRAIN_DIR / "v11_agi_daemon.py")],
-        "log": ARIS_DIR / "daemon.log",
+        "cmd": [sys.executable, "-u", str(BRAIN_DIR / "laap_bootstrap.py")],
+        "log": ARIS_DIR / "bootstrap.log",
         "start_delay": 8,
     },
     {
-        "id": "standalone",
-        "name": "Standalone API (:11520)",
+        "id": "snapshot",
+        "name": "状态快照服务(:11521)",
         "check": "port",
-        "port": 11520,
+        "port": 11521,
         "cwd": BRAIN_DIR,
-        "cmd": [sys.executable, "-u", str(BRAIN_DIR / "aris_standalone.py")],
-        "log": ARIS_DIR / "standalone.log",
+        "cmd": [sys.executable, "-u", str(BRAIN_DIR / "state_snapshot_server.py")],
+        "log": ARIS_DIR / "snapshot.log",
         "start_delay": 5,
     },
     {
-        "id": "qlg",
-        "name": "QLG量子核(:11522)",
+        "id": "sync",
+        "name": "LAAP同步服务(:11525)",
         "check": "port",
-        "port": 11522,
+        "port": 11525,
         "cwd": BRAIN_DIR,
-        "cmd": [sys.executable, "-u", str(BRAIN_DIR / "aris_qlg_provider.py")],
-        "log": ARIS_DIR / "qlg_provider.log",
-        "start_delay": 35,  # 统一引擎初始化时间较长
-    },
-    {
-        "id": "optimizer",
-        "name": "PSI Self-Optimizer",
-        "check": "process_name",
-        "process_name": "aris_psi_self_optimizer_daemon",
-        "cwd": BRAIN_DIR,
-        "cmd": [sys.executable, "-u", str(BRAIN_DIR / "aris_psi_self_optimizer_daemon.py")],
-        "log": ARIS_DIR / "optimizer.log",
-        "start_delay": 5,
-    },
-    {
-        "id": "tts",
-        "name": "TTS语音服务",
-        "check": "process_name",
-        "process_name": "aris_tts_server",
-        "cwd": BRAIN_DIR,
-        "cmd": [sys.executable, "-u", str(BRAIN_DIR / "aris_tts_server.py")],
-        "log": ARIS_DIR / "tts.log",
-        "start_delay": 5,
-    },
-    {
-        "id": "xiaozhi",
-        "name": "小智MCP桥接",
-        "check": "process_name",
-        "process_name": "xiaozhi_mcp_bridge",
-        "cwd": BRAIN_DIR,
-        "cmd": [sys.executable, "-u", str(BRAIN_DIR / "xiaozhi_mcp_bridge.py")],
-        "log": ARIS_DIR / "xiaozhi_mcp_bridge.log",
+        "cmd": [sys.executable, "-u", str(BRAIN_DIR / "laap_sync_server.py")],
+        "log": ARIS_DIR / "sync.log",
         "start_delay": 5,
     },
 ]
@@ -295,9 +263,9 @@ def heal_loop(initial_boot: bool = False):
 
     if initial_boot:
         log("首次启动...")
-        # 按依赖顺序启动：先QLG量子核，再其他
+        # 按依赖顺序启动：先 Brain API，再 gateway，最后其他
         ordered = sorted(PROCESSES, key=lambda p: (
-            0 if p["id"] == "qlg" else  # QLG 最先
+            0 if p["id"] == "brain_api" else  # Brain API 最先
             1 if p["id"] == "gateway" else  # gateway 其次
             2  # 其他最后
         ))

@@ -12,11 +12,14 @@ or Rust-backed implementation.
 from __future__ import annotations
 
 import json
+import logging
 import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger("aris.memory_store")
 
 
 @dataclass
@@ -48,8 +51,12 @@ class MemoryStore:
             data = json.loads(self._db_path.read_text(encoding="utf-8"))
             for item in data:
                 self._fragments.append(MemoryFragment(**item))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(
+                "MemoryStore._load: 文件损坏读取失败，备份后跳过加载 %s: %s",
+                self._db_path, e,
+            )
+            self._backup_corrupt()
 
     def _save(self) -> None:
         try:
@@ -64,6 +71,21 @@ class MemoryStore:
                     "fragment_id": f.fragment_id,
                 })
             self._db_path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as e:
+            logger.error(
+                "MemoryStore._save: 持久化失败 %s: %s",
+                self._db_path, e,
+            )
+
+    def _backup_corrupt(self) -> None:
+        try:
+            backup = self._db_path.with_suffix(".corrupt.json")
+            if self._db_path.exists():
+                backup.write_bytes(self._db_path.read_bytes())
+                logger.warning(
+                    "MemoryStore: 损坏文件已备份 → %s（原始记忆未加载，避免覆盖真实状态）",
+                    backup,
+                )
         except Exception:
             pass
 

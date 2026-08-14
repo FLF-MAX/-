@@ -195,6 +195,8 @@ class ArisAGI:
         return safety
 
     def _load_psi_net(self):
+        # 占位：Ψ-Net 分布式意识桥尚未实现（aris_brain/psi_net_bridge.py 不存在）。
+        # 仅当 start_psi_net=True 时触发，加载失败会记录 _load_errors 并跳过。
         from aris_brain.psi_net_bridge import ArisPsiNetBridge
         bridge = ArisPsiNetBridge(listen_port=11551, ao_port=11553)
         bridge.connect_engines(
@@ -207,6 +209,7 @@ class ArisAGI:
         return bridge
 
     def _load_psi_sync(self):
+        # 占位：PsiNetNode 同步尚未实现（aris_brain/psi_net_sync.py 不存在）。
         from aris_brain.psi_net_sync import AoPsiNetNode
         ao = AoPsiNetNode(port=11553, aris_port=11551)
         ao.start()

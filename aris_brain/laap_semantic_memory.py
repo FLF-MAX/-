@@ -71,11 +71,28 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
 
 
 class SentenceTransformersProvider(EmbeddingProvider):
-    """Local sentence-transformers model."""
+    """Local sentence-transformers model. Prefers offline cached models; falls back to HF.
 
-    def __init__(self, model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"):
+    优先使用本地已缓存的模型（离线可用），仅在未命中时退回 HuggingFace 在线下载。
+    """
+
+    _OFFLINE_CANDIDATES = (
+        "G:/Hermes-home/hindsight/models/bge-small-en-v1.5",
+        "G:/Hermes-home/models/bge-small-en-v1.5",
+        "bge-small-en-v1.5",
+    )
+
+    def __init__(self, model_name: Optional[str] = None):
         from sentence_transformers import SentenceTransformer
 
+        if model_name is None:
+            for cand in self._OFFLINE_CANDIDATES:
+                if Path(cand).exists():
+                    model_name = str(Path(cand))
+                    logger.info(f"SentenceTransformersProvider: using offline model {model_name}")
+                    break
+            if model_name is None:
+                model_name = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
         self.model = SentenceTransformer(model_name)
 
     def embed(self, texts: List[str]) -> List[List[float]]:
@@ -369,17 +386,21 @@ def _get_vector_db_backend(path: Path) -> MemoryBackend:
 
 
 def _get_embedding_provider() -> EmbeddingProvider:
-    """Return best available embedding provider."""
+    """Return best available embedding provider.
+
+    优先级：本地 sentence-transformers 模型（离线，零依赖）→
+    OpenAI 兼容 embedding API（需网络）→ TF-IDF 兜底。
+    """
+    try:
+        return SentenceTransformersProvider()
+    except Exception as e:
+        logger.warning(f"Local embedding provider failed: {e}")
+
     if os.environ.get("OPENAI_API_KEY") or os.environ.get("DEEPSEEK_API_KEY"):
         try:
             return OpenAIEmbeddingProvider()
         except Exception as e:
             logger.warning(f"OpenAI embedding provider failed: {e}")
-
-    try:
-        return SentenceTransformersProvider()
-    except Exception as e:
-        logger.warning(f"Local embedding provider failed: {e}")
 
     logger.warning("Using pure-numpy TF-IDF embeddings (no torch required)")
     return TfidfEmbeddingProvider()

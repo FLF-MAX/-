@@ -1,6 +1,6 @@
 """
-Aris Chinese Prose Engine — 量子核中文文体引擎
-================================================
+Aris Chinese Prose Engine — 中文文体引擎
+============================================
 把中文各种文体的结构编码进特征空间。
 
 文体类型：
@@ -215,13 +215,13 @@ ARGUMENT_PATTERNS = [
 ]
 
 # ================================================================
-# 中文散文量子核
+# 中文散文核
 # ================================================================
 
 class ChineseProseKernel:
     """
-    中文文体量子核。
-    
+    中文文体核。
+
     输入: 文体类型 + 主题
     输出: 符合文体规范的连贯中文文本
     
@@ -274,7 +274,7 @@ class ChineseProseKernel:
     def generate_essay(self, topic: str, genre: str = 'essay',
                        length_paragraphs: int = 5) -> str:
         """
-        Generate a structured Chinese essay using quantum kernel.
+        Generate a structured Chinese essay using the prose kernel.
         
         genre: 'essay' (散文), 'narration' (记叙文), 'argumentation' (议论文)
         """
@@ -436,7 +436,7 @@ class ChineseProseKernel:
 
 if __name__ == '__main__':
     logger.info("=" * 60)
-    logger.info("Aris 中文文体量子核 — 散文生成")
+    logger.info("Aris 中文文体核 — 散文生成")
     logger.info("=" * 60)
     CK = ChineseProseKernel()
     

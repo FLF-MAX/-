@@ -21,6 +21,20 @@ from aiohttp.test_utils import TestClient, TestServer
 from laap_brain.api import create_app
 
 
+def test_llm_bridge_disabled_without_key():
+    """未配置 DEEPSEEK_API_KEY 时，LLM 桥应优雅禁用（返回 None），不影响 Zero-LLM 管线。"""
+    from laap_brain.api import _llm_respond, _get_llm_integration
+
+    import os
+    old_key = os.environ.pop("DEEPSEEK_API_KEY", None)
+    try:
+        assert _get_llm_integration() is None
+        assert _llm_respond("你好") is None
+    finally:
+        if old_key is not None:
+            os.environ["DEEPSEEK_API_KEY"] = old_key
+
+
 @pytest.mark.asyncio
 async def test_health_endpoint():
     """/health 应返回 200 和 status=ok。"""
@@ -34,6 +48,25 @@ async def test_health_endpoint():
         data = await resp.json()
         assert data.get("status") == "ok"
         assert "version" in data
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_identity_endpoint():
+    """/v1/identity 应返回统一身份状态。"""
+    app = create_app()
+    server = TestServer(app)
+    client = TestClient(server)
+    await client.start_server()
+    try:
+        resp = await client.get("/v1/identity")
+        assert resp.status == 200
+        data = await resp.json()
+        identity = data.get("identity", {})
+        assert identity.get("name")
+        assert "self_presence" in identity
+        assert "bond_level" in identity
     finally:
         await client.close()
 
@@ -90,12 +123,80 @@ async def test_chat_completions_openai_compatible():
                 "messages": [{"role": "user", "content": "你好"}],
             },
         )
-        assert resp.status in (200, 500)
+        assert resp.status == 200
         data = await resp.json()
-        if resp.status == 200:
-            assert "choices" in data
-            assert data.get("object") == "chat.completion"
-        else:
-            assert "error" in data
+        assert data.get("object") == "chat.completion"
+        assert "choices" in data
+        msg = data["choices"][0]["message"]
+        assert msg.get("content"), "response content must not be empty"
+        # 引擎不应是空洞的 fallback（管线必须真正产出认知输出）
+        assert data.get("engine") in ("lmv5", "rules", "longform", "laap-core", "llm:deepseek")
+        # usage 修复：total_tokens 不再恒为 0
+        assert data["usage"]["total_tokens"] > 0
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_chat_returns_non_template_response():
+    """/v1/chat/completions 不应返回空壳模板（回归 bug 修复）。"""
+    app = create_app()
+    server = TestServer(app)
+    client = TestClient(server)
+    await client.start_server()
+    try:
+        resp = await client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "laap-core",
+                "messages": [{"role": "user", "content": "你好，你是谁？介绍一下自己"}],
+            },
+        )
+        assert resp.status == 200
+        data = await resp.json()
+        content = data["choices"][0]["message"]["content"].strip()
+        # 不允许再出现旧的空洞模板
+        assert "My cognitive engines are processing" not in content
+        assert content, "content must not be blank"
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_chat_rule_execution_list_files():
+    """/v1/chat/completions 应能执行规则工具（列出目录）。"""
+    app = create_app()
+    server = TestServer(app)
+    client = TestClient(server)
+    await client.start_server()
+    try:
+        resp = await client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "laap-core",
+                "messages": [{"role": "user", "content": "帮我看看当前目录有哪些文件"}],
+            },
+        )
+        assert resp.status == 200
+        data = await resp.json()
+        content = data["choices"][0]["message"]["content"]
+        assert not content.startswith("[空目录]"), "list_files 不应返回空目录"
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_endpoint():
+    """/v1/bootstrap 应唤醒并返回身份信息。"""
+    app = create_app()
+    server = TestServer(app)
+    client = TestClient(server)
+    await client.start_server()
+    try:
+        resp = await client.post("/v1/bootstrap", json={"user_name": "测试者"})
+        assert resp.status == 200
+        data = await resp.json()
+        assert data.get("status") == "awakened"
+        assert data.get("identity")
     finally:
         await client.close()

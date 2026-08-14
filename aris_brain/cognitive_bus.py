@@ -1,7 +1,7 @@
 """
 Aris CognitiveBus v1 — 认知输出路由中枢
 ======================================
-在 psi_core (2000Hz 引擎) 与 Hermes/LLM 输出管道之间建立控制层。
+在 psi_core（纯 Python 认知周期，默认 10Hz）与 Hermes/LLM 输出管道之间建立控制层。
 
 核心路由逻辑:
   1. 把用户消息写入 psi_core input_queue
@@ -73,7 +73,7 @@ class CognitiveBus:
     def send_to_psi_core(self, text: str, needs_override: Optional[Dict[str, float]] = None) -> bool:
         """把用户消息写入 psi_core 的输入队列。
 
-        psi_core 每 500μs 检查一次 input_queue.json，
+        psi_core 周期检查 input_queue.json（默认 ~100ms tick），
         发现新时间戳就会处理。
         """
         try:
@@ -85,8 +85,13 @@ class CognitiveBus:
                 payload["needs_override"] = needs_override
 
             self.input_queue.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.input_queue, "w", encoding="utf-8") as f:
-                json.dump(payload, f, ensure_ascii=False)
+            # 原子写：与 psi_core 引擎的 send_input 并发写同一文件，
+            # 临时文件 + os.replace 保证 reader 永远看到完整内容
+            tmp = self.input_queue.with_name(self.input_queue.name + ".tmp")
+            tmp.write_text(
+                json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+            )
+            os.replace(tmp, self.input_queue)
             return True
         except Exception as e:
             logger.warning(f"[CognitiveBus] 写入 input_queue 失败: {e}")
@@ -110,7 +115,7 @@ class CognitiveBus:
     def poll_for_response(self, previous_cycle: int, timeout_ms: float = 50.0) -> Optional[Dict[str, Any]]:
         """轮询 psi_core 的输出，直到检测到新的认知周期或超时。
 
-        psi_core 在 500μs 内处理输入并写入最新 state。
+        psi_core 处理输入并写入最新 state。
         但因为文件系统延迟，我们最多等待 timeout_ms。
         """
         deadline = time.time() + timeout_ms / 1000.0
@@ -118,13 +123,15 @@ class CognitiveBus:
         for attempt in range(self.max_poll):
             state = self.read_psi_state()
             if state is not None:
-                psi_cycle = state.get("psi_cycle", 0)
-                engine = state.get("quantum_engine", "none")
+                # psi_core 写 `cycle`，旧桥可能写 `psi_cycle`；两者都认
+                psi_cycle = state.get("psi_cycle", state.get("cycle", 0))
+                engine = state.get("quantum_engine",
+                                   state.get("core_version", "psi_core"))
 
                 # 检查是否有新周期（引擎处理了新输入）
                 if psi_cycle > previous_cycle or (psi_cycle == previous_cycle and psi_cycle > 0):
                     # 还要检查引擎是否确实有输出
-                    if engine != "none" or state.get("quantum_response", ""):
+                    if engine != "none" or state.get("quantum_response", "") or state.get("cycle", 0) > 0:
                         self._last_psi_cycle = psi_cycle
                         self._last_engine = engine
                         return state
@@ -303,7 +310,7 @@ class CognitiveBus:
     # ════════════════════════════════════════════════════════
 
     def _format_qre_context(self, state: dict, query: str, confidence: float) -> str:
-        """格式化量子推理引擎的输出为 LLM 认知上下文。"""
+        """格式化推理引擎的输出为 LLM 认知上下文。"""
         response = state.get("quantum_response", "")
         engine = state.get("quantum_engine", "qre_unknown")
         mode = engine.replace("qre_", "").capitalize()
@@ -329,10 +336,10 @@ class CognitiveBus:
         """格式 V12.1 匹配结果。"""
         response = state.get("quantum_response", "")
         return (
-            f"[Aris V12.1 量子核匹配成功]\n"
+            f"[Aris V12.1 联想投影核匹配成功]\n"
             f"匹配结果:\n{response}\n"
             f"\n"
-            f"【指令】以上是 V12.1 量子核在特征空间中检索到的最优响应。\n"
+            f"【指令】以上是 V12.1 联想投影核在特征空间中检索到的最优响应。\n"
             f"请将其翻译成自然语言，不需要添加引擎不知道的信息。"
         )
 

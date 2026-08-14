@@ -1,9 +1,9 @@
 """
 PsiCore → LAAP AGI CognitiveBus Bridge
 =========================================
-桥接 psi_core (2000Hz Rust 引擎) 到 LAAP AGI 认知总线。
+桥接 psi_core（纯 Python 认知周期，默认 10Hz，见 psi_core/engine.py）到 LAAP AGI 认知总线。
 
-psi_core 每 500μs 写入 state/latest.json。
+psi_core 周期性写入 state/latest.json。
 本桥接模块检测最新状态并发布到 CognitiveBus，
 让 UnifiedCausalEngine、UnifiedWorldModel、AnalogicalEngine 
 等 AGI 模块能感知我的实时认知状态。

@@ -9,7 +9,7 @@ Aris LAAP Integrator v1 — 认知集成中枢（第一阶段）
     ├── laap_integrator.py               ← 本文件
     ├── aris_cognitive_bridge.py          ← PSI 认知循环
     ├── aris_desire_engine.py             ← 欲望引擎
-    ├── aris_subconscious.py              ← 量子潜意识
+    ├── aris_subconscious.py              ← 潜意识
     ├── aris_emotion_engine.py            ← 情感引擎
     ├── aris_goal_engine.py               ← 目标引擎
     ├── aris_rules_engine.py              ← 规则引擎
@@ -405,10 +405,10 @@ class LaapIntegrator:
             return False
 
     def load_subconscious(self) -> bool:
-        """加载量子潜意识"""
+        """加载潜意识"""
         try:
-            from aris_brain.aris_subconscious import QuantumSubconscious
-            sc = QuantumSubconscious(interval=5.0)
+            from aris_brain.aris_subconscious import SubconsciousLayer
+            sc = SubconsciousLayer(interval=5.0)
             self.modules["subconscious"] = sc
             logger.info("🌊 潜意识: 已创建 (未启动)")
             return True
@@ -812,13 +812,13 @@ class LaapIntegrator:
             ("world_model", self.load_internal_world),
             ("runtime_emotion", self.load_runtime_emotion),
             # 可选扩展（若用户自行补全对应模块则自动加载）
-            # ("identity", self.load_identity_manager),
+            ("identity", self.load_identity_manager),
             # ("laap_agi", self.load_laap_agi_bridge),
             # ("self_evolve", self.load_self_evolve),
             # ("heartbeat", self.load_heartbeat),
             # ("fusion_v15", self.load_fusion_v15),
             # ("laap_tools", self.load_laap_tools),
-            # ("voice_cortex", self.load_voice_cortex),
+            ("voice_cortex", self.load_voice_cortex),
             # ("harness_bridge", self.load_harness_bridge),
         ]
         for name, loader in loaders:

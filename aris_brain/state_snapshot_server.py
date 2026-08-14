@@ -1,6 +1,6 @@
 """LAAP 健康仪表盘 API 服务器
 提供实时健康数据供 _dashboard.html 读取。
-端口: 11520 (与量子核端口复用)
+端口: 11521 (独立；11520 为 QUANTUM_PORT 默认，避免冲突)
 启动: python state_snapshot_server.py
 """
 import json, time, logging
@@ -9,7 +9,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 BRAIN = Path(__file__).parent.resolve()
 STATE = BRAIN / "state"
-PORT = 11520
+PORT = 11521
 
 # 延迟导入（避免循环依赖）
 _snapshot = None

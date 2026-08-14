@@ -4,7 +4,13 @@ Test script for LAAP AGI Unified Memory System Interface
 
 import time
 import sys
-sys.path.insert(0, "<LOCAL_PATH_REDACTED>")
+from pathlib import Path
+
+# 项目根目录：G:\laap（laap 包 + aris_brain 均在其下）
+_ROOT = Path(__file__).resolve().parent.parent.parent
+for _p in (str(_ROOT), str(_ROOT / "aris_brain"), str(_ROOT / "laap")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from laap.agi.unified_memory import UnifiedMemory
 from laap.agi.memory_system import MemoryType, MemoryPriority

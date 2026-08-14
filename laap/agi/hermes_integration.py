@@ -83,13 +83,18 @@ class HermesIntegration:
         return ""
 
     def _get_bridge(self):
-        """Lazy init the unified bridge."""
+        """Lazy init the unified bridge.
+
+        对照 Hermes 官方源码修复: laap.hermes_bridge.UnifiedBridge 在仓库中
+        并不存在（laap/ 下只有 agi/config/rust_bridge.py），原代码是死引用，
+        bridge 永远为 None，所有 Hermes 能力静默降级。
+        这里改为直接使用官方 run_agent.AIAgent（in-process），不再依赖
+        不存在的桥接模块。
+        """
         if self._bridge is None:
-            try:
-                from laap.hermes_bridge import UnifiedBridge
-                self._bridge = UnifiedBridge.get_instance()
-            except ImportError:
-                self._bridge = None
+            # 官方 Hermes 以 run_agent.py 存在为可用标志
+            if self.hermes_available:
+                self._bridge = True
         return self._bridge
 
     # ════════════════════════════════════════════════════════
@@ -103,20 +108,24 @@ class HermesIntegration:
 
         This is how CodeEvolution generates patches, how Autonomy makes
         decisions, and how Analogical engine reasons about patterns.
+
+        对照 Hermes 官方源码修复: 原实现先找 laap.hermes_bridge.UnifiedBridge
+        （模块不存在，永远 None），再走 _call_hermes_inprocess —— 而后者给
+        AIAgent 赋值官方不存在的 _extra_system_prompt 属性，必然失败。
+        现在直接走官方 run_agent.AIAgent + run_conversation(system_message=...)。
         """
         self.total_llm_calls += 1
-        bridge = self._get_bridge()
-        if bridge:
-            return bridge.llm_call(prompt, system, model=model, max_tokens=max_tokens)
 
         # Fallback: try in-process Hermes
         try:
             if not self.hermes_available:
                 return {"error": "no_llm", "text": ""}
             result = self._call_hermes_inprocess(prompt, system, max_tokens)
-            return {"text": result, "success": True}
+            # 降级/失败标记：in-process 失败时返回 [LLM unavailable: ...]
+            ok = not result.startswith("[LLM unavailable")
+            return {"text": result, "success": ok}
         except Exception as e:
-            return {"error": str(e), "text": ""}
+            return {"error": str(e), "text": "", "success": False}
 
     def llm_generate_patch(self, target_description: str,
                            current_code: str) -> Optional[Dict[str, Any]]:
@@ -159,10 +168,24 @@ If no improvement is needed, return the original code unchanged."""
         try:
             sys.path.insert(0, self.hermes_home)
             from run_agent import AIAgent
-            agent = AIAgent(model="", skip_context_files=True)
+            # 显式读取 Hermes 配置里的 model/provider，避免依赖进程环境继承
+            # （AIAgent(model="") 在独立进程中解析不到 model.default）。
+            model, provider = "", ""
+            try:
+                from hermes_cli.config import load_config_readonly
+                _cfg = load_config_readonly() or {}
+                _m = _cfg.get("model") or {}
+                model = _m.get("default", "")
+                provider = _m.get("provider", "")
+            except Exception:
+                pass
+            agent = AIAgent(model=model, provider=provider, skip_context_files=True)
             if system:
-                # Inject system message
-                agent._extra_system_prompt = system
+                # 对照官方源码 (run_agent.py run_conversation): chat() 只接受
+                # message，system prompt 必须经 run_conversation(system_message=...)
+                # 注入。官方不存在 _extra_system_prompt 属性，原赋值必然无效。
+                result = agent.run_conversation(prompt, system_message=system)
+                return str(result.get("final_response", ""))[:max_tokens]
             result = agent.chat(prompt)
             return str(result)[:max_tokens]
         except Exception as e:
@@ -174,22 +197,17 @@ If no improvement is needed, return the original code unchanged."""
 
     def sync_agi_state(self, agent_name: str,
                        state: Dict[str, Any]) -> bool:
-        """Sync AGI state to Hermes session DB."""
+        """Sync AGI state to Hermes session DB.
+
+        对照官方源码: hermes_state.SessionDB 只存聊天消息/会话元数据,
+        无 AGI 状态存储接口; 原代码的 UnifiedBridge.sync_session 不存在。
+        诚实降级: 该能力无法对接官方 API, 未实现。
+        """
         self.total_syncs += 1
-        bridge = self._get_bridge()
-        if bridge:
-            return bridge.sync_session(agent_name, {
-                "module_count": state.get("modules", 0),
-                "uptime": time.time() - self.created_at,
-                **state,
-            })
         return False
 
     def load_agi_state(self, agent_name: str) -> Optional[Dict[str, Any]]:
-        """Load AGI state from Hermes session DB."""
-        bridge = self._get_bridge()
-        if bridge:
-            return bridge.load_session_state(agent_name)
+        """Load AGI state from Hermes session DB. 同上, 官方无此能力, 未实现。"""
         return None
 
     # ════════════════════════════════════════════════════════
@@ -199,12 +217,29 @@ If no improvement is needed, return the original code unchanged."""
     def save_skill(self, name: str, domain: str,
                    steps: List[str], success_rate: float = 0.5,
                    description: str = "") -> bool:
-        """Save an evolution-discovered pattern as a Hermes skill."""
-        bridge = self._get_bridge()
-        if bridge:
-            result = bridge.propose_skill(name, domain, steps, success_rate, description)
-            return result.get("success", False)
-        return False
+        """Save an evolution-discovered pattern as a Hermes skill.
+
+        官方无"存技能"API, 这里直接写入官方技能目录:
+        $HERMES_HOME/skills/<domain>/<name>/SKILL.md (默认 ~/.hermes/skills),
+        与官方技能加载器共用同一目录与 frontmatter 格式。
+        """
+        if not name or not steps:
+            return False
+        try:
+            home = Path(os.environ.get("HERMES_HOME",
+                                       os.path.expanduser("~/.hermes")))
+            skill_dir = home / "skills" / (domain or "misc") / name
+            skill_dir.mkdir(parents=True, exist_ok=True)
+            desc = (description or name)[:60]
+            body = "\n".join(f"{i}. {s}" for i, s in enumerate(steps, 1))
+            skill_dir.joinpath("SKILL.md").write_text(
+                f"---\nname: {name}\ndescription: {desc}\n"
+                f"version: 1.0\nauthor: laap-aris\n---\n\n{body}\n",
+                encoding="utf-8")
+            return True
+        except Exception as e:
+            logger.warning(f"save_skill failed: {e}")
+            return False
 
     # ════════════════════════════════════════════════════════
     # Tool Access
@@ -212,29 +247,70 @@ If no improvement is needed, return the original code unchanged."""
 
     def execute_tool(self, tool_name: str,
                      args: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Execute a Hermes tool from AGI modules."""
-        bridge = self._get_bridge()
-        if bridge:
-            return bridge.execute_tool(tool_name, args)
-        return {"success": False, "error": "Bridge unavailable"}
+        """Execute a Hermes tool from AGI modules.
+
+        对照官方源码: 经 tools/registry.py 的 ToolRegistry.get_entry 取
+        工具条目并调用其 handler。仅当 Hermes 依赖可用时生效, 否则降级。
+        """
+        if not self.hermes_available:
+            return {"success": False, "error": "Hermes unavailable"}
+        try:
+            sys.path.insert(0, self.hermes_home)
+            from tools.registry import registry
+            entry = registry.get_entry(tool_name)
+            if entry is None:
+                return {"success": False,
+                        "error": f"Tool '{tool_name}' not registered"}
+            out = entry.handler(args or {})
+            if isinstance(out, str):
+                try:
+                    out = json.loads(out)
+                except Exception:
+                    pass
+            return {"success": True, "result": out}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def list_tools(self) -> List[str]:
-        """List available Hermes tools."""
-        bridge = self._get_bridge()
-        if bridge:
-            return bridge.list_available_tools()
-        return []
+        """List available Hermes tools (from tools/registry.py)."""
+        if not self.hermes_available:
+            return []
+        try:
+            sys.path.insert(0, self.hermes_home)
+            try:
+                import model_tools  # noqa: F401  触发官方工具自动发现
+            except Exception:
+                pass
+            from tools.registry import registry
+            names = []
+            for ts in registry.get_registered_toolset_names():
+                names.extend(registry.get_tool_names_for_toolset(ts))
+            return sorted(set(names))
+        except Exception as e:
+            logger.warning(f"list_tools failed: {e}")
+            return []
 
     # ════════════════════════════════════════════════════════
     # Config
     # ════════════════════════════════════════════════════════
 
     def get_config(self, key: str, default: Any = None) -> Any:
-        """Read Hermes config."""
-        bridge = self._get_bridge()
-        if bridge:
-            return bridge.get_hermes_config(key, default)
-        return default
+        """Read Hermes config via official hermes_cli.config.load_config_readonly."""
+        if not self.hermes_available:
+            return default
+        try:
+            sys.path.insert(0, self.hermes_home)
+            from hermes_cli.config import load_config_readonly
+            cfg = load_config_readonly() or {}
+            node = cfg
+            for part in key.split("."):
+                if not isinstance(node, dict) or part not in node:
+                    return default
+                node = node[part]
+            return node
+        except Exception as e:
+            logger.warning(f"get_config({key}) failed: {e}")
+            return default
 
     # ════════════════════════════════════════════════════════
     # Stats

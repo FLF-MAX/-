@@ -11,8 +11,12 @@
 """
 
 import sys, os
-sys.path.insert(0, "D:/laap-AGI/aris_brain")
-sys.path.insert(0, "D:/laap-AGI/aris_brain/psi_semiotics")
+from pathlib import Path
+_PSI_DIR = Path(__file__).resolve().parent
+_BRAIN_DIR = _PSI_DIR.parent
+for _p in (str(_BRAIN_DIR), str(_PSI_DIR)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 import numpy as np
 import time

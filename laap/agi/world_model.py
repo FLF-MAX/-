@@ -200,12 +200,12 @@ class Entity:
             "phys": self.phys.to_dict() if self.phys else None,
             "pos": self.pos.to_dict() if self.pos else None,
             "social": self.social.to_dict() if self.social else None,
-            "properties_keys": list(self.properties.keys()),
+            "properties": self.properties,
             "relationships": {
                 k: [(t, round(s, 3), ts) for t, s, ts in v]
                 for k, v in self.relationships.items()
             },
-            "history_count": len(self.history),
+            "history": self.history,
             "confidence": self.confidence,
             "source": self.source,
             "version": self.version,
@@ -974,7 +974,14 @@ class UnifiedWorldModel:
             eid=d["eid"], name=d.get("name", d["eid"]),
             entity_type=EntityType(d.get("type", "unknown")),
             phys=phys, pos=pos, social=social,
+            properties=d.get("properties", {}),
+            relationships={
+                k: [(t, s, ts) for t, s, ts in v]
+                for k, v in d.get("relationships", {}).items()
+            },
+            history=[dict(h) for h in d.get("history", [])],
             confidence=d.get("confidence", 0.5),
+            source=d.get("source"),
         )
 
     # ─────────── 查询 ───────────
@@ -1081,12 +1088,15 @@ class UnifiedWorldModel:
                 "type": r.relation_type.value, "strength": r.strength,
             } for rid, r in self.relations.items()},
             "counterfactuals": [b.to_dict() for b in self.counterfactual_branches],
-            "timeline_count": len(self.timeline),
+            "timeline": self.timeline,
             "simulations_run": self._simulations_run,
             "queries_answered": self._queries_answered,
         }
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        Path(path).write_text(
+            json.dumps(data, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
         logger.info(f"[UnifiedWorldModel] 保存到 {path}")
         return path
 
@@ -1119,6 +1129,7 @@ class UnifiedWorldModel:
 
             self._simulations_run = data.get("simulations_run", 0)
             self._queries_answered = data.get("queries_answered", 0)
+            self.timeline = [dict(e) for e in data.get("timeline", [])]
             logger.info(f"[UnifiedWorldModel] 加载完成: {len(self.entities)} 实体")
             return True
         except Exception as e:

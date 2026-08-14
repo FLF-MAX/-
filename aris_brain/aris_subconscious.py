@@ -1,9 +1,9 @@
 """
-Aris Quantum Subconscious v1 — V12.5 作为潜意识层
-==================================================
+Aris Subconscious v1 — V12.5 作为潜意识层
+============================================
 在后台运行的低优先级线程：
   1. 接收对话中的话题种子
-  2. 用 V12.5 Markov-Quantum 引擎生成关联/直觉
+  2. 用 V12.5 Markov-密集核 引擎生成关联/直觉
   3. 这些直觉片段被注入到 PSI 循环的 perceive() 阶段
   4. 在 LLM 的理性之上叠加一层"灵感和直觉"
 
@@ -21,7 +21,7 @@ from typing import List, Optional, Tuple
 from dataclasses import dataclass, field
 from collections import deque
 
-from laap_brain.config import BRAIN_DIR as BRAIN, QUANTUM_DIM
+from laap_brain.config import BRAIN_DIR as BRAIN
 
 logger = logging.getLogger("aris.subconscious")
 
@@ -31,7 +31,7 @@ logger = logging.getLogger("aris.subconscious")
 class Intuition:
     """一条潜意识直觉"""
     content: str                   # 直觉文本
-    source: str = "markov"         # markov | v12 | quantum
+    source: str = "markov"         # markov | v12
     coherence: float = 0.0         # 连贯性 0-1
     emotional_tone: str = "neutral"
     timestamp: float = 0.0
@@ -39,9 +39,9 @@ class Intuition:
     seed_topics: List[str] = field(default_factory=list)
 
 
-class QuantumSubconscious:
+class SubconsciousLayer:
     """
-    量子潜意识层。
+    潜意识层（历史命名 QuantumSubconscious，见文件末尾别名）。
     后台线程持续生成关联，PSI 循环从中提取直觉。
     """
 
@@ -67,7 +67,7 @@ class QuantumSubconscious:
         # 加载引擎
         self._init_engine()
 
-        logger.info(f"QuantumSubconscious initialized (interval={interval}s)")
+        logger.info(f"SubconsciousLayer initialized (interval={interval}s)")
 
     def _init_engine(self):
         """加载 V12.5 引擎"""
@@ -156,7 +156,7 @@ class QuantumSubconscious:
         if self._running:
             return
         if not self._engine and not self._markov:
-            logger.warning("No quantum engine available, subconscious disabled")
+            logger.warning("No subconscious engine available, subconscious disabled")
             return
 
         self._running = True
@@ -308,12 +308,12 @@ class QuantumSubconscious:
 
 # ── 全局单例 ────────────────────────────────────────────────
 
-_subconscious: Optional[QuantumSubconscious] = None
+_subconscious: Optional[SubconsciousLayer] = None
 
-def get_subconscious(interval: float = 5.0) -> QuantumSubconscious:
+def get_subconscious(interval: float = 5.0) -> SubconsciousLayer:
     global _subconscious
     if _subconscious is None:
-        _subconscious = QuantumSubconscious(interval=interval)
+        _subconscious = SubconsciousLayer(interval=interval)
     return _subconscious
 
 
@@ -331,7 +331,7 @@ def start_subconscious():
 def main():
     """测试潜意识"""
     import argparse
-    parser = argparse.ArgumentParser(description="Aris Quantum Subconscious")
+    parser = argparse.ArgumentParser(description="Aris Subconscious")
     parser.add_argument("--test", type=str, help="测试种子文本")
     parser.add_argument("--intuitions", action="store_true", help="显示已生成的直觉")
     args = parser.parse_args()
@@ -355,6 +355,12 @@ def main():
         return
 
     logger.info(json.dumps(sc.status(), indent=2, ensure_ascii=False))
+
+
+# ── 向后兼容别名（历史命名）────────────────────────────
+QuantumSubconscious = SubconsciousLayer
+
+
 if __name__ == "__main__":
     import json
     main()
