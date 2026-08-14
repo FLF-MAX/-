@@ -81,8 +81,12 @@ def _b3_continuous() -> Dict[str, Any]:
         learner.observe(s, r)
         seq.append(s)
     rate = sum(1 for t in range(60, 140) if seq[t] == "beta") / 80
+    # 收敛后（t=100+，探索期已过）的最优率——反映稳态真实能力，
+    # 避免固定窗口从 t=60 起算时把漂移后探索期算进 score。
+    rate_converged = sum(1 for t in range(100, 140) if seq[t] == "beta") / 40
     return {"name": "drift_aware_continuous_learning", "score": rate, "baseline": 0.5,
-            "detail": {"alarms": learner.detected_drift(), "best": learner.best()}}
+            "detail": {"alarms": learner.detected_drift(), "best": learner.best(),
+                       "converged_rate": round(rate_converged, 3)}}
 
 
 def _b4_prediction() -> Dict[str, Any]:

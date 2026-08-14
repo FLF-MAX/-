@@ -111,6 +111,37 @@ def plot_single(hist: list, key: str, width: int = 46) -> None:
     print()
 
 
+def plot_diff(hist: list) -> None:
+    """最近两次运行的差异对比：每个基准升/降/平。"""
+    if len(hist) < 2:
+        print(f"数据不足 2 次运行（当前 {len(hist)} 条），无法对比。")
+        return
+    prev, cur = hist[-2], hist[-1]
+    print(f"差异对比 @{prev['commit'][:7]} → @{cur['commit'][:7]}")
+    print(f"  mean: {prev['mean']:.4f} → {cur['mean']:.4f}  "
+          f"({'+' if cur['mean'] >= prev['mean'] else ''}{cur['mean'] - prev['mean']:.4f})")
+    print("-" * 52)
+    up = down = same = 0
+    for name in sorted(cur["scores"]):
+        p = prev["scores"].get(name)
+        c = cur["scores"][name]
+        if p is None:
+            print(f"  + {name:<34} {c:.3f}  (新增)")
+            up += 1
+            continue
+        d = c - p
+        arrow = "↑" if d > 1e-6 else ("↓" if d < -1e-6 else "→")
+        if d > 1e-6:
+            up += 1
+        elif d < -1e-6:
+            down += 1
+        else:
+            same += 1
+        print(f"  {arrow} {name:<34} {p:.3f} → {c:.3f}  ({'+' if d > 0 else ''}{d:.3f})")
+    print("-" * 52)
+    print(f"  ↑升 {up}  →平 {same}  ↓降 {down}")
+
+
 def _baselines() -> dict:
     """从 laap_v2.benchmark_suite 读各基准 baseline（不 exec，读函数源码太重）。
     返回静态映射（基准名→naive baseline）。"""
@@ -160,6 +191,7 @@ def main(argv: list = None) -> int:
     p = argparse.ArgumentParser(prog="plot_benchmarks", description="基准趋势 ASCII 图")
     p.add_argument("--last3", action="store_true", help="只看最近3次")
     p.add_argument("--detail", metavar="KEY", help="看单个基准的历史")
+    p.add_argument("--diff", action="store_true", help="最近两次运行差异对比")
     args = p.parse_args(argv)
 
     hist = _load()
@@ -172,6 +204,10 @@ def main(argv: list = None) -> int:
             print(f"找不到基准: {args.detail}（可选: b1..b5 或部分名称）")
             return 1
         plot_single(hist, key)
+        return 0
+
+    if args.diff:
+        plot_diff(hist)
         return 0
 
     plot_mean(hist)
