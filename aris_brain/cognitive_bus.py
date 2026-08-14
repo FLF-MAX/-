@@ -186,6 +186,9 @@ class CognitiveBus:
         self._stats_lock.release()
         previous_cycle = self._last_psi_cycle
 
+        # 0. 记录用户消息事件
+        self.emit_user_event(user_message)
+
         # 1. 记录发送前的时间
         t0 = time.time()
 
@@ -203,7 +206,12 @@ class CognitiveBus:
         state = self.poll_for_response(previous_cycle, timeout_ms)
 
         # 4. 路由决策
-        return self._classify(state, t0, user_message)
+        result = self._classify(state, t0, user_message)
+        try:
+            self.emit_route_event(RouteResult.from_dict(result))
+        except Exception as e:
+            logger.debug(f"[CognitiveBus] 路由事件广播失败: {e}")
+        return result
 
     def _classify(
         self,

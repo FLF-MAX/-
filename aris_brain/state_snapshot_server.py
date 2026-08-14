@@ -1,15 +1,20 @@
 """LAAP 健康仪表盘 API 服务器
 提供实时健康数据供 _dashboard.html 读取。
 端口: 11521 (独立；11520 为 QUANTUM_PORT 默认，避免冲突)
-启动: python state_snapshot_server.py
+启动: python state_snapshot_server.py   (也可 -m aris_brain.state_snapshot_server)
 """
-import json, time, logging
+import json, time, logging, sys
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 BRAIN = Path(__file__).parent.resolve()
+sys.path.insert(0, str(BRAIN))   # 保证能 import 顶层兄弟模块 (state_snapshot)
+sys.path.insert(0, str(BRAIN.parent))
 STATE = BRAIN / "state"
+SNAPSHOT_DIR = BRAIN / "snapshots"
 PORT = 11521
+
+SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
 # 延迟导入（避免循环依赖）
 _snapshot = None
@@ -25,8 +30,11 @@ logger = logging.getLogger("aris.viz")
 
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        self._handle_safe(lambda: self._route())
+
+    def _route(self):
         snap = _get_snapshot()
-        
+
         if self.path == "/health":
             health = snap.compute_health_score()
             timeline = snap.get_health_timeline(hours=72)
@@ -70,6 +78,16 @@ class HealthHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
             self.wfile.write(b'{"error": "not found"}')
+
+    def _handle_safe(self, fn):
+        try:
+            fn()
+        except Exception as e:
+            logger.warning(f"请求处理失败 {self.path}: {e}")
+            try:
+                self._json({"error": str(e)})
+            except Exception:
+                pass
 
     def _json(self, data):
         self.send_response(200)

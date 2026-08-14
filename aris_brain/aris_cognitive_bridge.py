@@ -68,7 +68,7 @@ except Exception:
 
 # ── CognitiveBus 认知总线 ────────────────────────────────────
 try:
-    from cognitive_bus import route_message as _cb_route, get_bus as _get_cb
+    from aris_brain.cognitive_bus import route_message as _cb_route, get_bus as _get_cb
     _cb_available = True
 except Exception:
     _cb_available = False

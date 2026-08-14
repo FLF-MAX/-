@@ -37,13 +37,15 @@ API:
 
 import logging
 
-import json, time, logging, os, threading
+import json, time, logging, os, threading, sys
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timezone
 from typing import Optional, Dict, List, Any
 
 BRAIN = Path(__file__).parent.resolve()
+sys.path.insert(0, str(BRAIN))      # 保证能 import 顶层兄弟模块 (state_snapshot / memory_store)
+sys.path.insert(0, str(BRAIN.parent))
 STATE = BRAIN / "state"
 SNAPSHOTS = BRAIN / "snapshots"
 MOBILE_DIR = STATE / "mobile"
